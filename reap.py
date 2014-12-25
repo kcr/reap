@@ -55,9 +55,9 @@ def execute_backtrack(codelet, string, ip = 0):
         action = None
         while action != NEXT:
             f = codelet[ip]
-            print (ip, f, state, i, c)
+            #print (ip, f, state, i, c)
             action, rest = f(state, i, c)
-            print (ip, action, rest)
+            #print (ip, action, rest)
             if action == FAILURE:
                 return False
             elif action == FORK:
@@ -77,6 +77,15 @@ def execute_backtrack(codelet, string, ip = 0):
 
     return True
 
+def trycode(codelet, ostensible, string, expected):
+    print('Trying', string,'against the ostensible', ostensible)
+    r = execute_backtrack(codelet, string)
+    if r == expected:
+        print('Got', r)
+    else:
+        print('Got', r, 'expected', expected)
+    print()
+
 
 if __name__ == '__main__':
     codelet0 = [
@@ -85,18 +94,9 @@ if __name__ == '__main__':
         Exactly('t'),
         ]
 
-    print()
-    print(
-        execute_backtrack(codelet0, 'cat'),
-        )
-    print()
-    print(
-        execute_backtrack(codelet0, 'dog'),
-        )
-    print()
-    print(
-        execute_backtrack(codelet0, 'dot'),
-        )
+    trycode(codelet0, 'cat', 'cat', True)
+    trycode(codelet0, 'cat', 'dog', False)
+    trycode(codelet0, 'cat', 'dot', False)
 
     codelet1 = [
         Fork(5),
@@ -109,19 +109,7 @@ if __name__ == '__main__':
         Exactly('g'),
         ]
 
-    print()
-    print('cat|dog cat')
-    print(
-        execute_backtrack(codelet1, 'cat'),
-        )
-    print()
-    print('cat|dog dog')
-    print(
-        execute_backtrack(codelet1, 'dog'),
-        )
-    print()
-    print('cat|dog dot')
-    print(
-        execute_backtrack(codelet1, 'dot'),
-        )
+    trycode(codelet1, 'cat|dog', 'cat', True)
+    trycode(codelet1, 'cat|dog', 'dog', True)
+    trycode(codelet1, 'cat|dog', 'dot', False)
 

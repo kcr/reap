@@ -51,10 +51,9 @@ class Jump(Operation):
 
 def execute_backtrack(codelet, string, ip = 0):
     state = None
-    iterator = enumerate(string)
-    i, c = next(iterator)
-    while True:
-        try:
+    for i, c in enumerate(string):
+        action = None
+        while action != NEXT:
             f = codelet[ip]
             print (ip, f, state, i, c)
             action, rest = f(state, i, c)
@@ -66,7 +65,7 @@ def execute_backtrack(codelet, string, ip = 0):
                     if execute_backtrack(codelet, string[i:], target):
                         return True
             elif action == NEXT:
-                i, c = next(iterator)
+                pass
             elif action == JUMP:
                 (ip,) = rest
             else:
@@ -75,8 +74,6 @@ def execute_backtrack(codelet, string, ip = 0):
             ip += 1
             if ip > len(codelet): # ran off the end
                 break
-        except StopIteration:
-            break
 
     return True
 

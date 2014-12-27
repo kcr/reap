@@ -1,5 +1,84 @@
 #!/usr/bin/python3
 
+import enum
+
+class Op(enum.IntEnum):
+    lparen = 1
+    rparen = 2
+    altern = 3
+    concat = 4
+    star = 5
+    plus = 6
+    maybe = 7
+
+    def __repr__(self):
+        return str(self)[3:]
+
+opmap = {
+    '(': Op.lparen,
+    ')': Op.rparen,
+    '|': Op.altern,
+    '*': Op.star,
+    '+': Op.plus,
+    '?': Op.maybe,
+    Op.concat: Op.concat, # surprise
+    }
+
+
+def parse_2rp(string):
+    work = ['']
+    for c in string:
+        if c in ')*?+':
+            work.append(c)
+        elif c in '(|':
+            if c == '(':
+                work.append(Op.concat)
+            work.append(c)
+            work.append('')
+            continue
+        else:
+            work.append(Op.concat)
+            work.append(c)
+        print(work)
+
+    print()
+
+    stack = []
+    output = []
+
+    for c in work:
+        if c in opmap:
+            op = opmap[c]
+            print('        ', op, c)
+            if op == Op.lparen:
+                print('        ', '(')
+                stack.append(op)
+            elif op == Op.rparen:
+                print('        ', ')')
+                top = stack.pop()
+                ## if top[0] == Op.lparen:
+                ##     output.append('')
+
+                # will raise IndexError if there are too many )s
+                while top != Op.lparen:
+                    output.append(top)
+                    top = stack.pop()
+            else:
+                print('        ', '-')
+                # will Indexerror if there aren't enough operands ?
+                # XXX: | ?
+                while stack and op < stack[-1]:
+                    output.append(stack.pop())
+                stack.append(op)
+        else:
+            output.append(c)
+
+        print('%-8s' % (repr(c),), stack, output)
+    output += reversed(stack)
+
+    return output
+
+
 def execute_backtrack(codelet, string, ip = 0, level = 0):
     state = None
     for i, c in enumerate(string + '$'):#XXX need a better end sigil

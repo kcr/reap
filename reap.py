@@ -78,6 +78,44 @@ def parse_2rp(string):
 
     return output
 
+def generate(rp):
+    stack = []
+    for token in rp:
+        if not isinstance(token, Op):
+            if token:
+                stack.append([('match', token)])
+            else:
+                stack.append([])
+        elif token == Op.concat:
+            b = stack.pop()
+            a = stack.pop()
+            stack.append(a + b)
+        elif token == Op.maybe:
+            if stack[-1]: # ()? -> ()
+                a = stack.pop()
+                stack.append([('skip', 1, len(a) + 1)] + a)
+        elif token == Op.plus:
+            if stack[-1]: # ()+ -> ()
+                a = stack.pop()
+                stack.append(a + [('skip', -len(a), 1)])
+        elif token == Op.star:
+            if stack[-1]: # ()* -> ()
+                a = stack.pop()
+                stack.append([('skip', 1, len(a) + 2)] + a + [('skip', -len(a))])
+        elif token == Op.altern:
+            b = stack.pop()
+            a = stack.pop()
+            if not a and not b:
+                stack.append([])
+            elif not a or not b: # and b
+                c = a or b
+                stack.append([('skip', 1, len(c) + 1)] + c)
+            else:
+                stack.append([('skip', 1, len(a) + 2)] + a + [('skip', len(b) + 1)] + b)
+
+    (result,) = stack
+    return result
+
 
 def execute_backtrack(codelet, string, ip = 0, level = 0):
     state = None

@@ -182,6 +182,14 @@ def trycode(codelet, ostensible, string, expected):
         print('Got', r, 'expected', expected)
     print()
 
+def tryre(re, string, expected):
+    print('Trying', string, 'against', re)
+    r = execute_backtrack(generate(parse_2rp(re)), string)
+    if r == expected:
+        print('Got', r)
+    else:
+        print('Got', r, 'expected', expected)
+    print()
 
 if __name__ == '__main__':
     codelet0 = [
@@ -210,4 +218,21 @@ if __name__ == '__main__':
     trycode(codelet1, 'cat|dog', 'dot', False)
     trycode(codelet1, 'cat|dog', 'catx', True)
     trycode(codelet1, 'cat|dog', 'ca', False)
+
+    tryre('cat', 'cat', True)
+    tryre('cat', 'dog', False)
+    tryre('cat', 'dot', False)
+    tryre('cat|dog', 'cat', True)
+    tryre('cat|dog', 'dog', True)
+    tryre('cat|dog', 'dot', False)
+    tryre('cat|dog', 'catx', True)
+    tryre('cat|dog', 'ca', False)
+
+
+    tryre('ab(gh|)', 'ab', True)
+    tryre('ab(gh|)', 'abxgh', True)
+    tryre('ab(gh|)', 'abgh', True)
+    tryre('ab(gh|xy)', 'ab', False)
+    tryre('ab(gh|xy)', 'abgh', True)
+    tryre('ab(gh|xy)', 'abxy', True)
 

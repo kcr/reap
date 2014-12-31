@@ -39,9 +39,9 @@ def parse_2rp(string):
         else:
             work.append(Op.concat)
             work.append(c)
-        print(work)
+        dprint(work)
 
-    print()
+    dprint()
 
     stack = []
     output = []
@@ -49,12 +49,12 @@ def parse_2rp(string):
     for c in work:
         if c in opmap:
             op = opmap[c]
-            print('        ', op, c)
+            dprint('        ', op, c)
             if op == Op.lparen:
-                print('        ', '(')
+                dprint('        ', '(')
                 stack.append(op)
             elif op == Op.rparen:
-                print('        ', ')')
+                dprint('        ', ')')
                 top = stack.pop()
                 ## if top[0] == Op.lparen:
                 ##     output.append('')
@@ -64,7 +64,7 @@ def parse_2rp(string):
                     output.append(top)
                     top = stack.pop()
             else:
-                print('        ', '-')
+                dprint('        ', '-')
                 # will Indexerror if there aren't enough operands ?
                 # XXX: | ?
                 while stack and op < stack[-1]:
@@ -73,7 +73,7 @@ def parse_2rp(string):
         else:
             output.append(c)
 
-        print('%-8s' % (repr(c),), stack, output)
+        dprint('%-8s' % (repr(c),), stack, output)
     output += reversed(stack)
 
     return output
@@ -155,7 +155,8 @@ def execute_backtrack(codelet, string, ip = 0, level = 0):
     return True
 
 def dprint(*args, **kw):
-    return print(*args, **kw)
+    if False:
+        return print(*args, **kw)
 
 def trycode(codelet, ostensible, string, expected):
     print('Trying', string,'against the ostensible', ostensible)

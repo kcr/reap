@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
+
 import enum
+
 
 class Op(enum.IntEnum):
     lparen = 1
@@ -13,6 +15,7 @@ class Op(enum.IntEnum):
 
     def __repr__(self):
         return str(self)[3:]
+
 
 opmap = {
     '(': Op.lparen,
@@ -77,6 +80,7 @@ def parse_2rp(string):
     output += reversed(stack)
 
     return output
+
 
 def generate(rp):
     stack = []
@@ -169,18 +173,21 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
     dprint (level * ' ', ip, 'everythign consumed -> True')
     return True
 
+
 def dprint(*args, **kw):
     if False:
         return print(*args, **kw)
 
+
 def trycode(codelet, ostensible, string, expected):
-    print('Trying', string,'against the ostensible', ostensible)
+    print('Trying', string, 'against the ostensible', ostensible)
     r = execute_backtrack(codelet, string)
     if r == expected:
         print('Got', r)
     else:
         print('Got', r, 'expected', expected)
     print()
+
 
 def tryre(re, string, expected):
     print('Trying', string, 'against', re)
@@ -190,6 +197,7 @@ def tryre(re, string, expected):
     else:
         print('Got', r, 'expected', expected)
     print()
+
 
 if __name__ == '__main__':
     codelet0 = [
@@ -227,7 +235,6 @@ if __name__ == '__main__':
     tryre('cat|dog', 'dot', False)
     tryre('cat|dog', 'catx', True)
     tryre('cat|dog', 'ca', False)
-
 
     tryre('ab(gh|)', 'ab', True)
     tryre('ab(gh|)', 'abxgh', True)

@@ -174,6 +174,35 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
     return True
 
 
+def execute_threaded(codelet, string):
+    dprint()
+    dprint(codelet)
+    currentthreads = [0] # one thread starting at the beginning
+
+    for c in string + '$':
+        dprint()
+        dprint(repr(c))
+        nextthreads = []
+        for ip in currentthreads:
+            if ip >= len(codelet): # ran off the end
+                return True
+            action, rest = codelet[ip][0], codelet[ip][1:]
+            dprint(repr(c), ip, action, rest)
+            if action == 'match':
+                if c == rest[0]:
+                    nextthreads.append(ip + 1)
+                # else failure, thread dies
+            elif action == 'skip':
+                currentthreads += [ip + target for target in rest]
+
+        dprint(nextthreads)
+        if not nextthreads: # all my threads are dead
+            return False
+
+        currentthreads = nextthreads
+
+    return not [ip for ip in threads if ip < len(codelet)]
+
 def dprint(*args, **kw):
     if False:
         return print(*args, **kw)
@@ -189,9 +218,9 @@ def trycode(codelet, ostensible, string, expected):
     print()
 
 
-def tryre(re, string, expected):
-    print('Trying', string, 'against', re)
-    r = execute_backtrack(generate(parse_2rp(re)), string)
+def tryre(execute, re, string, expected):
+    print('Trying', string, 'against', re, 'with', execute.__name__)
+    r = execute(generate(parse_2rp(re)), string)
     if r == expected:
         print('Got', r)
     else:
@@ -227,19 +256,39 @@ if __name__ == '__main__':
     trycode(codelet1, 'cat|dog', 'catx', True)
     trycode(codelet1, 'cat|dog', 'ca', False)
 
-    tryre('cat', 'cat', True)
-    tryre('cat', 'dog', False)
-    tryre('cat', 'dot', False)
-    tryre('cat|dog', 'cat', True)
-    tryre('cat|dog', 'dog', True)
-    tryre('cat|dog', 'dot', False)
-    tryre('cat|dog', 'catx', True)
-    tryre('cat|dog', 'ca', False)
+    tryre(execute_backtrack, 'cat', 'cat', True)
+    tryre(execute_backtrack, 'cat', 'dog', False)
+    tryre(execute_backtrack, 'cat', 'dot', False)
+    tryre(execute_backtrack, 'cat|dog', 'cat', True)
+    tryre(execute_backtrack, 'cat|dog', 'dog', True)
+    tryre(execute_backtrack, 'cat|dog', 'dot', False)
+    tryre(execute_backtrack, 'cat|dog', 'catx', True)
+    tryre(execute_backtrack, 'cat|dog', 'ca', False)
 
-    tryre('ab(gh|)', 'ab', True)
-    tryre('ab(gh|)', 'abxgh', True)
-    tryre('ab(gh|)', 'abgh', True)
-    tryre('ab(gh|xy)', 'ab', False)
-    tryre('ab(gh|xy)', 'abgh', True)
-    tryre('ab(gh|xy)', 'abxy', True)
+    tryre(execute_backtrack, 'ab(gh|)', 'ab', True)
+    tryre(execute_backtrack, 'ab(gh|)', 'abxgh', True)
+    tryre(execute_backtrack, 'ab(gh|)', 'abgh', True)
+    tryre(execute_backtrack, 'ab(gh|xy)', 'ab', False)
+    tryre(execute_backtrack, 'ab(gh|xy)', 'abgh', True)
+    tryre(execute_backtrack, 'ab(gh|xy)', 'abxy', True)
 
+    # should complete and not hang or bomb out
+    tryre(execute_backtrack, 'a**', 'a', True)
+
+    tryre(execute_threaded, 'cat', 'cat', True)
+    tryre(execute_threaded, 'cat', 'dog', False)
+    tryre(execute_threaded, 'cat', 'dot', False)
+    tryre(execute_threaded, 'cat|dog', 'cat', True)
+    tryre(execute_threaded, 'cat|dog', 'dog', True)
+    tryre(execute_threaded, 'cat|dog', 'dot', False)
+    tryre(execute_threaded, 'cat|dog', 'catx', True)
+    tryre(execute_threaded, 'cat|dog', 'ca', False)
+
+    tryre(execute_threaded, 'ab(gh|)', 'ab', True)
+    tryre(execute_threaded, 'ab(gh|)', 'abxgh', True)
+    tryre(execute_threaded, 'ab(gh|)', 'abgh', True)
+    tryre(execute_threaded, 'ab(gh|xy)', 'ab', False)
+    tryre(execute_threaded, 'ab(gh|xy)', 'abgh', True)
+    tryre(execute_threaded, 'ab(gh|xy)', 'abxy', True)
+
+    tryre(execute_threaded, 'a**', 'a', True)

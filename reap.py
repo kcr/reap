@@ -117,17 +117,29 @@ def generate(rp):
     return result
 
 
-def execute_backtrack(codelet, string, ip = 0, level = 0):
+def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
+    if been is None:
+        been = set()
     state = None
+    tick = 0
+    if level > 32:
+        raise Exception('too much recursion')
     for i, c in enumerate(string + '$'):#XXX need a better end sigil
         process = True
         while process:
+            if tick > 100:
+                raise Exception ('execution expired')
+            tick += 1
+
+            if ip in been:
+                return False
+
             if ip >= len(codelet): # ran off the end
                 dprint(level*' ', ip, '>=', len(codelet), '-> True')
                 return True
 
             f = codelet[ip]
-            dprint (level*' ', ip, f, state, i, c)
+            dprint (level*' ', ip, f, state, i, c, been)
 
             action, rest = f[0], f[1:]
             if action == 'match':
@@ -136,8 +148,9 @@ def execute_backtrack(codelet, string, ip = 0, level = 0):
                     return False
                 process = False
             elif action == 'skip':
+                been.add(ip)
                 for target in rest[:-1]:
-                    if execute_backtrack(codelet, string[i:], ip + target, level + 1):
+                    if execute_backtrack(codelet, string[i:], ip + target, level + 1, been):
                         return True
                 ip = ip + rest[-1]
                 continue
@@ -145,6 +158,8 @@ def execute_backtrack(codelet, string, ip = 0, level = 0):
                 raise Exception('unknown action', action)
 
             ip += 1
+
+        been = set()
 
     if ip < len(codelet):
         dprint (level * ' ', ip, 'did not satisfy the pattern -> False')

@@ -14,9 +14,9 @@ def match(re, string):
 
 @contextlib.contextmanager
 def timer():
-    t0 = time.time()
+    t0 = time.clock()
     yield
-    print('duration', time.time() - t0, 'seconds')
+    print('duration', time.clock() - t0, 'seconds')
 
 
 def main():

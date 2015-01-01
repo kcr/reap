@@ -222,7 +222,7 @@ def execute_threaded(codelet, string):
                     nextthreads.append(ip + 1)
                 # else failure, thread dies
             elif action == 'skip':
-                currentthreads += [ip + target for target in rest]
+                currentthreads += [ip + target for target in rest if ip + target not in currentthreads]
 
         dprint(nextthreads)
         if not nextthreads: # all my threads are dead

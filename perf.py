@@ -26,12 +26,14 @@ def main():
         print()
         print(i, repr(tre), 'against', repr(s))
         print('re   ', end='')
+        c = re.compile(tre)
         with timer():
-            re.compile(tre).match(s)
+            c.match(s)
 
         print('reap ', end='')
+        c = reap.generate(reap.parse_2rp(tre))
         with timer():
-            match(tre, s)
+            reap.execute_threaded(c, s)
 
 
 if __name__ == '__main__':

@@ -276,29 +276,32 @@ def execute_threaded(codelet, string):
 
     return not [ip for ip in threads if ip < len(codelet)]
 
+debugging = False
 def dprint(*args, **kw):
-    if False:
+    if debugging:
         return print(*args, **kw)
 
 
 def trycode(execute, codelet, ostensible, string, expected):
-    print('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__)
+    print('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end=': ')
+    dprint()
     r = execute(codelet, string)
     if r == expected:
         print('Got', r)
     else:
         print('Got', r, 'expected', expected)
-    print()
+    dprint()
 
 
 def tryre(execute, re, string, expected):
-    print('Trying', string, 'against', re, 'with', execute.__name__)
+    print('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
+    dprint()
     r = execute(generate(parse_2rp(re)), string)
     if r == expected:
         print('Got', r)
     else:
         print('Got', r, 'expected', expected)
-    print()
+    dprint()
 
 
 if __name__ == '__main__':

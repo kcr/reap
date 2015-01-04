@@ -31,6 +31,7 @@
 
 
 import enum
+import itertools
 
 
 class Op(enum.IntEnum):
@@ -66,7 +67,7 @@ class Instruction:
         self.tick = None
 
     def __repr__(self):
-        return '[%s %s]' % (self.action, ' '.join(repr(x) for x in self.rest))
+        return '<%s %s>' % (self.action, ' '.join(repr(x) for x in self.rest))
 
 
 opmap = {
@@ -246,12 +247,37 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
     return True
 
 
+ticker = itertools.count().__next__
+
+
 def execute_threaded(codelet, string):
     dprint()
     dprint(codelet)
-    currentthreads = [0] # one thread starting at the beginning
+    currentthreads = []
+    tick = ticker()
 
+    def addthread(pool, ip):
+        if ip < len(codelet) and codelet[ip].tick == tick:
+            return
+
+        if ip < len(codelet):
+            codelet[ip].tick = tick
+
+            action = codelet[ip].action
+            if action == Action.skip:
+                for target in codelet[ip].rest:
+                    addthread(pool, ip + target)
+            else:
+                pool.append(ip)
+        else:
+            pool.append(ip) # so we can hit the victory condition *gag*
+        dprint(pool)
+
+    addthread(currentthreads, 0)  # one thread starting at the beginning
+
+    dprint(currentthreads)
     for c in string + '$':
+        tick = ticker()
         dprint()
         dprint(repr(c))
         nextthreads = []
@@ -260,13 +286,11 @@ def execute_threaded(codelet, string):
                 return True
             instruction = codelet[ip]
             action = instruction.action
-            dprint(repr(c), ip, instruction)
+            dprint(tick, repr(c), ip, instruction)
             if action == Action.exact:
                 if c == instruction.rest[0]:
-                    nextthreads.append(ip + 1)
+                    addthread(nextthreads, ip + 1)
                 # else failure, thread dies
-            elif action == Action.skip:
-                currentthreads += [ip + target for target in instruction.rest if ip + target not in currentthreads]
 
         dprint(nextthreads)
         if not nextthreads: # all my threads are dead

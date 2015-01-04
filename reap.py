@@ -47,17 +47,6 @@ class Op(enum.IntEnum):
     __repr__ = __str__
 
 
-class Action(enum.IntEnum):
-    skip = 0
-    save = 1
-    exact = 2
-
-    def __str__(self):
-        return super().__str__()[7:]
-
-    __repr__ = __str__
-
-
 class Instruction:
     def __init__(self, action, *rest):
         self.action = action
@@ -139,7 +128,7 @@ def generate(rp):
         if not isinstance(token, Op):
             if token:
                 stack.append(
-                    [Instruction(Action.exact, token)]
+                    [Instruction('exact', token)]
                     )
             else:
                 stack.append([])
@@ -151,7 +140,7 @@ def generate(rp):
             if stack[-1]: # ()? -> ()
                 a = stack.pop()
                 stack.append(
-                    [Instruction(Action.skip, 1, len(a) + 1)]
+                    [Instruction('skip', 1, len(a) + 1)]
                     + a
                     )
         elif token == Op.plus:
@@ -159,15 +148,15 @@ def generate(rp):
                 a = stack.pop()
                 stack.append(
                     a +
-                    [Instruction(Action.skip, -len(a), 1)]
+                    [Instruction('skip', -len(a), 1)]
                     )
         elif token == Op.star:
             if stack[-1]: # ()* -> ()
                 a = stack.pop()
                 stack.append(
-                    [Instruction(Action.skip, 1, len(a) + 2)]
+                    [Instruction('skip', 1, len(a) + 2)]
                     + a +
-                    [Instruction(Action.skip, -len(a))]
+                    [Instruction('skip', -len(a))]
                     )
         elif token == Op.altern:
             b = stack.pop()
@@ -177,14 +166,14 @@ def generate(rp):
             elif not a or not b: # and b
                 c = a or b
                 stack.append(
-                    [Instruction(Action.skip, 1, len(c) + 1)]
+                    [Instruction('skip', 1, len(c) + 1)]
                     + c
                     )
             else:
                 stack.append(
-                    [Instruction(Action.skip, 1, len(a) + 2)]
+                    [Instruction('skip', 1, len(a) + 2)]
                     + a +
-                    [Instruction(Action.skip, len(b) + 1)]
+                    [Instruction('skip', len(b) + 1)]
                     + b
                     )
 
@@ -213,12 +202,12 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tic
             action = instruction.action
             dprint (level*' ', ip, instruction, state, i, c, scoreboard, tick)
 
-            if action == Action.exact:
+            if action == 'exact':
                 if c != instruction.rest[0]:
                     dprint(level*' ', ip, c,'!=', instruction.rest, '-> False')
                     return False
                 process = False
-            elif action == Action.skip:
+            elif action == 'skip':
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
                     if execute_backtrack(codelet, string[i:], ip + target, level + 1, scoreboard, tick):
@@ -256,7 +245,7 @@ def execute_threaded(codelet, string):
             scoreboard[ip] = tick
 
             action = codelet[ip].action
-            if action == Action.skip:
+            if action == 'skip':
                 for target in codelet[ip].rest:
                     addthread(pool, ip + target)
             else:
@@ -279,7 +268,7 @@ def execute_threaded(codelet, string):
             instruction = codelet[ip]
             action = instruction.action
             dprint(tick, repr(c), ip, instruction)
-            if action == Action.exact:
+            if action == 'exact':
                 if c == instruction.rest[0]:
                     addthread(nextthreads, ip + 1)
                 # else failure, thread dies
@@ -323,9 +312,9 @@ def tryre(execute, re, string, expected):
 
 if __name__ == '__main__':
     codelet0 = [
-        Instruction(Action.exact, 'c'),
-        Instruction(Action.exact, 'a'),
-        Instruction(Action.exact, 't'),
+        Instruction('exact', 'c'),
+        Instruction('exact', 'a'),
+        Instruction('exact', 't'),
         ]
 
     trycode(execute_backtrack, codelet0, 'cat', 'cat', True)
@@ -336,14 +325,14 @@ if __name__ == '__main__':
     trycode(execute_threaded, codelet0, 'cat', 'dot', False)
 
     codelet1 = [
-        Instruction(Action.skip, 1, 5),
-        Instruction(Action.exact, 'c'),
-        Instruction(Action.exact, 'a'),
-        Instruction(Action.exact, 't'),
-        Instruction(Action.skip, 4),
-        Instruction(Action.exact, 'd'),
-        Instruction(Action.exact, 'o'),
-        Instruction(Action.exact, 'g'),
+        Instruction('skip', 1, 5),
+        Instruction('exact', 'c'),
+        Instruction('exact', 'a'),
+        Instruction('exact', 't'),
+        Instruction('skip', 4),
+        Instruction('exact', 'd'),
+        Instruction('exact', 'o'),
+        Instruction('exact', 'g'),
         ]
 
     trycode(execute_backtrack, codelet1, 'cat|dog', 'cat', True)

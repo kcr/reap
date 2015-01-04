@@ -290,7 +290,8 @@ def execute_threaded(codelet, string):
 
         currentthreads = nextthreads
 
-    return not [ip for ip in threads if ip < len(codelet)]
+    return False # really, something went wrong
+
 
 debugging = False
 def dprint(*args, **kw):

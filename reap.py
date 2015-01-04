@@ -192,30 +192,26 @@ def generate(rp):
     return result
 
 
-def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
-    if been is None:
-        been = set()
+def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tick = None):
     state = None
-    tick = 0
-    if level > 32:
-        raise Exception('too much recursion')
+    if tick is None:
+        tick = 0
+    if scoreboard is None:
+        scoreboard = [None] * len(codelet)
+
     for i, c in enumerate(string + '$'):#XXX need a better end sigil
         process = True
         while process:
-            if tick > 100:
-                raise Exception ('execution expired')
-            tick += 1
-
-            if ip in been:
-                return False
-
             if ip >= len(codelet): # ran off the end
                 dprint(level*' ', ip, '>=', len(codelet), '-> True')
                 return True
 
+            if scoreboard[ip] == tick:
+                return False
+
             instruction = codelet[ip]
             action = instruction.action
-            dprint (level*' ', ip, instruction, state, i, c, been)
+            dprint (level*' ', ip, instruction, state, i, c, scoreboard, tick)
 
             if action == Action.exact:
                 if c != instruction.rest[0]:
@@ -223,9 +219,9 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
                     return False
                 process = False
             elif action == Action.skip:
-                been.add(ip)
+                scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
-                    if execute_backtrack(codelet, string[i:], ip + target, level + 1, been):
+                    if execute_backtrack(codelet, string[i:], ip + target, level + 1, scoreboard, tick):
                         return True
                 ip = ip + instruction.rest[-1]
                 continue
@@ -234,7 +230,7 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
 
             ip += 1
 
-        been = set()
+        tick += 1
 
     if ip < len(codelet):
         dprint (level * ' ', ip, 'did not satisfy the pattern -> False')

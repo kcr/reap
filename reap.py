@@ -29,9 +29,7 @@
 # SUCH DAMAGE.
 
 
-
 import enum
-import itertools
 
 
 class Op(enum.IntEnum):
@@ -247,21 +245,19 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, been = None):
     return True
 
 
-ticker = itertools.count().__next__
-
-
 def execute_threaded(codelet, string):
     dprint()
     dprint(codelet)
     currentthreads = []
-    tick = ticker()
+    tick = 0
+    scoreboard = [None] * len(codelet)
 
     def addthread(pool, ip):
-        if ip < len(codelet) and codelet[ip].tick == tick:
+        if ip < len(codelet) and scoreboard[ip] == tick:
             return
 
         if ip < len(codelet):
-            codelet[ip].tick = tick
+            scoreboard[ip] = tick
 
             action = codelet[ip].action
             if action == Action.skip:
@@ -277,7 +273,7 @@ def execute_threaded(codelet, string):
 
     dprint(currentthreads)
     for c in string + '$':
-        tick = ticker()
+        tick += 1
         dprint()
         dprint(repr(c))
         nextthreads = []

@@ -156,7 +156,7 @@ def generate(rp):
                 stack.append(
                     [Instruction('skip', 1, len(a) + 2)]
                     + a +
-                    [Instruction('skip', -len(a))]
+                    [Instruction('skip', -len(a) - 1)]
                     )
         elif token == Op.altern:
             b = stack.pop()
@@ -362,6 +362,12 @@ if __name__ == '__main__':
     tryre(execute_backtrack, 'ab(gh|xy)', 'abgh', True)
     tryre(execute_backtrack, 'ab(gh|xy)', 'abxy', True)
 
+    tryre(execute_backtrack, 'a*x', 'x', True)
+    tryre(execute_backtrack, 'a*x', 'ax', True)
+    tryre(execute_backtrack, 'a*x', 'aax', True)
+    tryre(execute_backtrack, 'a*x', 'aaax', True)
+    tryre(execute_backtrack, 'a*x', 'aaaaaaaaaaaaaaax', True)
+
     # should complete and not hang or bomb out
     tryre(execute_backtrack, 'a**', 'a', True)
 
@@ -380,5 +386,11 @@ if __name__ == '__main__':
     tryre(execute_threaded, 'ab(gh|xy)', 'ab', False)
     tryre(execute_threaded, 'ab(gh|xy)', 'abgh', True)
     tryre(execute_threaded, 'ab(gh|xy)', 'abxy', True)
+
+    tryre(execute_threaded, 'a*x', 'x', True)
+    tryre(execute_threaded, 'a*x', 'ax', True)
+    tryre(execute_threaded, 'a*x', 'aax', True)
+    tryre(execute_threaded, 'a*x', 'aaax', True)
+    tryre(execute_threaded, 'a*x', 'aaaaaaaaaaaaaaax', True)
 
     tryre(execute_threaded, 'a**', 'a', True)

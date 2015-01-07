@@ -40,11 +40,20 @@ class Op(enum.IntEnum):
     star = 5
     plus = 6
     maybe = 7
+    capture = 99
 
     def __str__(self):
         return super().__str__()[3:]
 
     __repr__ = __str__
+
+
+class LParen:
+    def __init__(self, capture):
+        self.capture = capture
+
+    def __int__(self):
+        return int(Op.lparen)
 
 
 class Instruction:
@@ -70,7 +79,7 @@ opmap = {
 
 def parse_2rp(string):
     work = ['']
-    for c in string:
+    for c in '(' + string + ')':
         if c in ')*?+':
             work.append(c)
         elif c in '(|':
@@ -89,13 +98,15 @@ def parse_2rp(string):
     stack = []
     output = []
 
+    capture = 0
     for c in work:
         if c in opmap:
             op = opmap[c]
             dprint('        ', op, c)
             if op == Op.lparen:
                 dprint('        ', '(')
-                stack.append(op)
+                stack.append(LParen(capture))
+                capture += 1
             elif op == Op.rparen:
                 dprint('        ', ')')
                 top = stack.pop()
@@ -103,14 +114,16 @@ def parse_2rp(string):
                 ##     output.append('')
 
                 # will raise IndexError if there are too many )s
-                while top != Op.lparen:
+                while not isinstance(top, LParen):
                     output.append(top)
                     top = stack.pop()
+                output.append(top.capture)
+                output.append(Op.capture)
             else:
                 dprint('        ', '-')
                 # will Indexerror if there aren't enough operands ?
                 # XXX: | ?
-                while stack and op < stack[-1]:
+                while stack and int(stack[-1]) > int(op):
                     output.append(stack.pop())
                 stack.append(op)
         else:
@@ -126,12 +139,22 @@ def generate(rp):
     stack = []
     for token in rp:
         if not isinstance(token, Op):
-            if token:
+            if token == '':
+                stack.append([])
+            elif isinstance(token, str):
                 stack.append(
                     [Instruction('exact', token)]
                     )
             else:
-                stack.append([])
+                stack.append(token)
+        elif token == Op.capture:
+            slot = stack.pop()
+            a = stack.pop()
+            stack.append(
+                [Instruction('save', 2 * slot)]
+                + a +
+                [Instruction('save', 2 * slot + 1)]
+                )
         elif token == Op.concat:
             b = stack.pop()
             a = stack.pop()
@@ -181,8 +204,9 @@ def generate(rp):
     return result
 
 
-def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tick = None):
-    state = None
+def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=None, tick=None, saved=None):
+    if saved is None:
+        saved = {}
     if tick is None:
         tick = 0
     if scoreboard is None:
@@ -192,15 +216,15 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tic
         process = True
         while process:
             if ip >= len(codelet): # ran off the end
-                dprint(level*' ', ip, '>=', len(codelet), '-> True')
-                return True
+                dprint(level*' ', ip, '>=', len(codelet), '-> saved')
+                return saved
 
             if scoreboard[ip] == tick:
                 return False
 
             instruction = codelet[ip]
             action = instruction.action
-            dprint (level*' ', ip, instruction, state, i, c, scoreboard, tick)
+            dprint (level*' ', i, repr(c), ip, instruction, saved, tick)
 
             if action == 'exact':
                 if c != instruction.rest[0]:
@@ -210,10 +234,15 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tic
             elif action == 'skip':
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
-                    if execute_backtrack(codelet, string[i:], ip + target, level + 1, scoreboard, tick):
-                        return True
+                    r = execute_backtrack(
+                        codelet, string[i:], i + off,
+                        ip + target, level + 1, scoreboard, tick, dict(saved))
+                    if r:
+                        return r
                 ip = ip + instruction.rest[-1]
                 continue
+            elif action == 'save':
+                saved[instruction.rest[0]] = i + off
             else:
                 raise Exception('unknown action', action)
 
@@ -226,8 +255,8 @@ def execute_backtrack(codelet, string, ip = 0, level = 0, scoreboard = None, tic
         # unconsumed
         return False
 
-    dprint (level * ' ', ip, 'everythign consumed -> True')
-    return True
+    dprint (level * ' ', ip, 'everythign consumed -> saved')
+    return saved
 
 
 def execute_threaded(codelet, string):
@@ -236,41 +265,47 @@ def execute_threaded(codelet, string):
     currentthreads = []
     tick = 0
     scoreboard = [None] * len(codelet)
+    i = 0
 
-    def addthread(pool, ip):
+    def addthread(pool, ip, cp, saved):
         if ip < len(codelet) and scoreboard[ip] == tick:
             return
 
         if ip < len(codelet):
             scoreboard[ip] = tick
 
-            action = codelet[ip].action
+            instruction = codelet[ip]
+            action = instruction.action
             if action == 'skip':
                 for target in codelet[ip].rest:
-                    addthread(pool, ip + target)
+                    addthread(pool, ip + target, cp, saved)
+            elif action == 'save':
+                d = dict(saved)
+                d[instruction.rest[0]] = cp
+                addthread(pool, ip + 1, cp, d)
             else:
-                pool.append(ip)
+                pool.append((ip, saved))
+            dprint(i, tick, ip, instruction, saved)
         else:
-            pool.append(ip) # so we can hit the victory condition *gag*
-        dprint(pool)
+            pool.append((ip, saved)) # so we can hit the victory condition *gag*
 
-    addthread(currentthreads, 0)  # one thread starting at the beginning
+    addthread(currentthreads, 0, 0, {})  # one thread starting at the beginning
 
     dprint(currentthreads)
-    for c in string + '$':
+    for i, c in enumerate(string + '$'):
         tick += 1
         dprint()
         dprint(repr(c))
         nextthreads = []
-        for ip in currentthreads:
+        for ip, saved in currentthreads:
             if ip >= len(codelet): # ran off the end
-                return True
+                return saved
             instruction = codelet[ip]
             action = instruction.action
-            dprint(tick, repr(c), ip, instruction)
+            dprint(i, tick, repr(c), ip, instruction, saved)
             if action == 'exact':
                 if c == instruction.rest[0]:
-                    addthread(nextthreads, ip + 1)
+                    addthread(nextthreads, ip + 1, i + 1, saved)
                 # else failure, thread dies
 
         dprint(nextthreads)
@@ -292,6 +327,8 @@ def trycode(execute, codelet, ostensible, string, expected):
     print('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end=': ')
     dprint()
     r = execute(codelet, string)
+    if isinstance(expected, bool):
+        r = bool(r)
     if r == expected:
         print('Got', r)
     else:
@@ -303,6 +340,8 @@ def tryre(execute, re, string, expected):
     print('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
     dprint()
     r = execute(generate(parse_2rp(re)), string)
+    if isinstance(expected, bool):
+        r = bool(r)
     if r == expected:
         print('Got', r)
     else:
@@ -312,9 +351,11 @@ def tryre(execute, re, string, expected):
 
 if __name__ == '__main__':
     codelet0 = [
+        Instruction('save', 0),
         Instruction('exact', 'c'),
         Instruction('exact', 'a'),
         Instruction('exact', 't'),
+        Instruction('save', 1),
         ]
 
     trycode(execute_backtrack, codelet0, 'cat', 'cat', True)
@@ -325,6 +366,7 @@ if __name__ == '__main__':
     trycode(execute_threaded, codelet0, 'cat', 'dot', False)
 
     codelet1 = [
+        Instruction('save', 0),
         Instruction('skip', 1, 5),
         Instruction('exact', 'c'),
         Instruction('exact', 'a'),
@@ -333,6 +375,7 @@ if __name__ == '__main__':
         Instruction('exact', 'd'),
         Instruction('exact', 'o'),
         Instruction('exact', 'g'),
+        Instruction('save', 1),
         ]
 
     trycode(execute_backtrack, codelet1, 'cat|dog', 'cat', True)

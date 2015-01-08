@@ -266,6 +266,7 @@ def execute_threaded(codelet, string):
     tick = 0
     scoreboard = [None] * len(codelet)
     i = 0
+    match = False
 
     def addthread(pool, ip, cp, saved):
         if ip < len(codelet) and scoreboard[ip] == tick:
@@ -299,7 +300,8 @@ def execute_threaded(codelet, string):
         nextthreads = []
         for ip, saved in currentthreads:
             if ip >= len(codelet): # ran off the end
-                return saved
+                match = saved
+                break # need to let any threads that are still running continue
             instruction = codelet[ip]
             action = instruction.action
             dprint(i, tick, repr(c), ip, instruction, saved)
@@ -310,7 +312,7 @@ def execute_threaded(codelet, string):
 
         dprint(nextthreads)
         if not nextthreads: # all my threads are dead
-            return False
+            return match
 
         currentthreads = nextthreads
 
@@ -437,3 +439,7 @@ if __name__ == '__main__':
     tryre(execute_threaded, 'a*x', 'aaaaaaaaaaaaaaax', True)
 
     tryre(execute_threaded, 'a**', 'a', True)
+
+    # greed, capturing
+    tryre(execute_backtrack, 'a*a', 'aaaaaa', {0: 0, 1: 6})
+    tryre(execute_threaded, 'a*a', 'aaaaaa', {0: 0, 1: 6})

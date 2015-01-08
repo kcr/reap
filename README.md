@@ -1,5 +1,5 @@
 This is an implementation of NFA-based regular-expression matching in pure
-python.  At the moment, it implements a small subset of the nromal regular
+python.  At the moment, it implements a small subset of the normal regular
 expression syntax that only a mathematician would be satisfied with
 (although it should sufficient to recognize all regular languages, doing so
 wouldn't be any fun.)

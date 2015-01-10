@@ -7,6 +7,8 @@ import re
 
 import reap
 
+COUNT=100
+
 
 def match(re, string):
     return reap.execute_threaded(reap.generate(reap.parse_2rp(re)), string)
@@ -28,12 +30,14 @@ def main():
         print('re   ', end='')
         c = re.compile(tre)
         with timer():
-            c.match(s)
+            for _ in range(COUNT):
+                c.match(s)
 
         print('reap ', end='')
         c = reap.generate(reap.parse_2rp(tre))
         with timer():
-            reap.execute_threaded(c, s)
+            for _ in range(COUNT):
+                reap.execute_threaded(c, s)
 
 
 if __name__ == '__main__':

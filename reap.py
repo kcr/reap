@@ -57,6 +57,7 @@ class LParen:
 
 
 class Instruction:
+    __slots__ = ['action', 'rest', 'tick']
     def __init__(self, action, *rest):
         self.action = action
         self.rest = rest

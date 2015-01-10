@@ -202,6 +202,7 @@ def generate(rp):
                     )
 
     (result,) = stack
+    result += [Instruction('match')]
     return result
 
 
@@ -216,10 +217,6 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
     for i, c in enumerate(string + '$'):#XXX need a better end sigil
         process = True
         while process:
-            if ip >= len(codelet): # ran off the end
-                dprint(level*' ', ip, '>=', len(codelet), '-> saved')
-                return saved
-
             if scoreboard[ip] == tick:
                 return False
 
@@ -227,7 +224,9 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
             action = instruction.action
             dprint (level*' ', i, repr(c), ip, instruction, saved, tick)
 
-            if action == 'exact':
+            if action == 'match':
+                return saved
+            elif action == 'exact':
                 if c != instruction.rest[0]:
                     dprint(level*' ', ip, c,'!=', instruction.rest, '-> False')
                     return False
@@ -270,26 +269,23 @@ def execute_threaded(codelet, string):
     match = False
 
     def addthread(pool, ip, cp, saved):
-        if ip < len(codelet) and scoreboard[ip] == tick:
+        if scoreboard[ip] == tick:
             return
 
-        if ip < len(codelet):
-            scoreboard[ip] = tick
+        scoreboard[ip] = tick
 
-            instruction = codelet[ip]
-            action = instruction.action
-            if action == 'skip':
-                for target in codelet[ip].rest:
-                    addthread(pool, ip + target, cp, saved)
-            elif action == 'save':
-                d = dict(saved)
-                d[instruction.rest[0]] = cp
-                addthread(pool, ip + 1, cp, d)
-            else:
-                pool.append((ip, saved))
-            dprint(i, tick, ip, instruction, saved)
+        instruction = codelet[ip]
+        action = instruction.action
+        if action == 'skip':
+            for target in codelet[ip].rest:
+                addthread(pool, ip + target, cp, saved)
+        elif action == 'save':
+            d = dict(saved)
+            d[instruction.rest[0]] = cp
+            addthread(pool, ip + 1, cp, d)
         else:
-            pool.append((ip, saved)) # so we can hit the victory condition *gag*
+            pool.append((ip, saved))
+        dprint(i, tick, ip, instruction, saved)
 
     addthread(currentthreads, 0, 0, {})  # one thread starting at the beginning
 
@@ -300,9 +296,6 @@ def execute_threaded(codelet, string):
         dprint(repr(c))
         nextthreads = []
         for ip, saved in currentthreads:
-            if ip >= len(codelet): # ran off the end
-                match = saved
-                break # need to let any threads that are still running continue
             instruction = codelet[ip]
             action = instruction.action
             dprint(i, tick, repr(c), ip, instruction, saved)
@@ -310,6 +303,9 @@ def execute_threaded(codelet, string):
                 if c == instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
                 # else failure, thread dies
+            elif action == 'match':
+                match = saved
+                break
 
         dprint(nextthreads)
         if not nextthreads: # all my threads are dead
@@ -359,6 +355,7 @@ if __name__ == '__main__':
         Instruction('exact', 'a'),
         Instruction('exact', 't'),
         Instruction('save', 1),
+        Instruction('match'),
         ]
 
     trycode(execute_backtrack, codelet0, 'cat', 'cat', True)
@@ -379,6 +376,7 @@ if __name__ == '__main__':
         Instruction('exact', 'o'),
         Instruction('exact', 'g'),
         Instruction('save', 1),
+        Instruction('match'),
         ]
 
     trycode(execute_backtrack, codelet1, 'cat|dog', 'cat', True)

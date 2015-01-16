@@ -32,6 +32,17 @@
 import enum
 
 
+class Instruction:
+    __slots__ = ['action', 'rest', 'tick']
+    def __init__(self, action, *rest):
+        self.action = action
+        self.rest = rest
+        self.tick = None
+
+    def __repr__(self):
+        return '<%s %s>' % (self.action, ' '.join(repr(x) for x in self.rest))
+
+
 class Op(enum.IntEnum):
     lparen = 1
     rparen = 2
@@ -54,17 +65,6 @@ class LParen:
 
     def __int__(self):
         return int(Op.lparen)
-
-
-class Instruction:
-    __slots__ = ['action', 'rest', 'tick']
-    def __init__(self, action, *rest):
-        self.action = action
-        self.rest = rest
-        self.tick = None
-
-    def __repr__(self):
-        return '<%s %s>' % (self.action, ' '.join(repr(x) for x in self.rest))
 
 
 opmap = {

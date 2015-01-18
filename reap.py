@@ -343,55 +343,31 @@ if __name__ == '__main__':
     trycode(execute_threaded, codelet1, 'cat|dog', 'catx', True)
     trycode(execute_threaded, codelet1, 'cat|dog', 'ca', False)
 
-    tryre(execute_backtrack, 'cat', 'cat', True)
-    tryre(execute_backtrack, 'cat', 'dog', False)
-    tryre(execute_backtrack, 'cat', 'dot', False)
-    tryre(execute_backtrack, 'cat|dog', 'cat', True)
-    tryre(execute_backtrack, 'cat|dog', 'dog', True)
-    tryre(execute_backtrack, 'cat|dog', 'dot', False)
-    tryre(execute_backtrack, 'cat|dog', 'catx', True)
-    tryre(execute_backtrack, 'cat|dog', 'ca', False)
+    for execute in [execute_backtrack, execute_threaded]:
+        for (regex, string, expected) in [
+                ('cat', 'cat', True),
+                ('cat', 'dog', False),
+                ('cat', 'dot', False),
+                ('cat|dog', 'cat', True),
+                ('cat|dog', 'dog', True),
+                ('cat|dog', 'dot', False),
+                ('cat|dog', 'catx', True),
+                ('cat|dog', 'ca', False),
 
-    tryre(execute_backtrack, 'ab(gh|)', 'ab', True)
-    tryre(execute_backtrack, 'ab(gh|)', 'abxgh', True)
-    tryre(execute_backtrack, 'ab(gh|)', 'abgh', True)
-    tryre(execute_backtrack, 'ab(gh|xy)', 'ab', False)
-    tryre(execute_backtrack, 'ab(gh|xy)', 'abgh', True)
-    tryre(execute_backtrack, 'ab(gh|xy)', 'abxy', True)
+                ('ab(gh|)', 'ab', True),
+                ('ab(gh|)', 'abxgh', True),
+                ('ab(gh|)', 'abgh', True),
+                ('ab(gh|xy)', 'ab', False),
+                ('ab(gh|xy)', 'abgh', True),
+                ('ab(gh|xy)', 'abxy', True),
 
-    tryre(execute_backtrack, 'a*x', 'x', True)
-    tryre(execute_backtrack, 'a*x', 'ax', True)
-    tryre(execute_backtrack, 'a*x', 'aax', True)
-    tryre(execute_backtrack, 'a*x', 'aaax', True)
-    tryre(execute_backtrack, 'a*x', 'aaaaaaaaaaaaaaax', True)
+                ('a*x', 'x', True),
+                ('a*x', 'ax', True),
+                ('a*x', 'aax', True),
+                ('a*x', 'aaax', True),
+                ('a*x', 'aaaaaaaaaaaaaaax', True),
 
-    # should complete and not hang or bomb out
-    tryre(execute_backtrack, '(a*)*', 'a', True)
-
-    tryre(execute_threaded, 'cat', 'cat', True)
-    tryre(execute_threaded, 'cat', 'dog', False)
-    tryre(execute_threaded, 'cat', 'dot', False)
-    tryre(execute_threaded, 'cat|dog', 'cat', True)
-    tryre(execute_threaded, 'cat|dog', 'dog', True)
-    tryre(execute_threaded, 'cat|dog', 'dot', False)
-    tryre(execute_threaded, 'cat|dog', 'catx', True)
-    tryre(execute_threaded, 'cat|dog', 'ca', False)
-
-    tryre(execute_threaded, 'ab(gh|)', 'ab', True)
-    tryre(execute_threaded, 'ab(gh|)', 'abxgh', True)
-    tryre(execute_threaded, 'ab(gh|)', 'abgh', True)
-    tryre(execute_threaded, 'ab(gh|xy)', 'ab', False)
-    tryre(execute_threaded, 'ab(gh|xy)', 'abgh', True)
-    tryre(execute_threaded, 'ab(gh|xy)', 'abxy', True)
-
-    tryre(execute_threaded, 'a*x', 'x', True)
-    tryre(execute_threaded, 'a*x', 'ax', True)
-    tryre(execute_threaded, 'a*x', 'aax', True)
-    tryre(execute_threaded, 'a*x', 'aaax', True)
-    tryre(execute_threaded, 'a*x', 'aaaaaaaaaaaaaaax', True)
-
-    tryre(execute_threaded, '(a*)*', 'a', True)
-
-    # greed, capturing
-    tryre(execute_backtrack, 'a*a', 'aaaaaa', {0: 0, 1: 6})
-    tryre(execute_threaded, 'a*a', 'aaaaaa', {0: 0, 1: 6})
+                ('(a*)*', 'a', True), # should complete and not hang or bomb out
+                ('a*a', 'aaaaaa', {0: 0, 1: 6}), # greed, capturing
+                ]:
+            tryre(execute, regex, string, expected)

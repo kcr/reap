@@ -34,7 +34,7 @@ def main():
                 c.match(s)
 
         print('reap ', end='')
-        c = reap.generate(reap.parse_2rp(tre))
+        c = reap.re_compile(tre)
         with timer():
             for _ in range(COUNT):
                 reap.execute_threaded(c, s)

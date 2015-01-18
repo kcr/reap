@@ -41,7 +41,7 @@ class Instruction:
         self.tick = None
 
     def __repr__(self):
-        return '<%s %s>' % (self.action, ' '.join(repr(x) for x in self.rest))
+        return '<%s%s>' % (self.action, ''.join(' ' + repr(x) for x in self.rest))
 
 
 def maybe(codelet):

@@ -29,7 +29,8 @@
 # SUCH DAMAGE.
 
 
-import enum
+import rply
+import rply.token
 
 
 class Instruction:
@@ -43,167 +44,121 @@ class Instruction:
         return '<%s %s>' % (self.action, ' '.join(repr(x) for x in self.rest))
 
 
-class Op(enum.IntEnum):
-    lparen = 1
-    rparen = 2
-    altern = 3
-    concat = 4
-    star = 5
-    plus = 6
-    maybe = 7
-    capture = 99
-
-    def __str__(self):
-        return super().__str__()[3:]
-
-    __repr__ = __str__
+def maybe(codelet):
+    return [Instruction('skip', 1, len(codelet) + 1)] + codelet
 
 
-class LParen:
-    def __init__(self, capture):
-        self.capture = capture
+class MyLexer:
+    tmap = {
+        '(': 'LPAREN', ')': 'RPAREN', '|': 'VBAR', '*': 'STAR', '+': 'PLUS',
+        '?': 'QUESTION'}
+    default = 'CHAR'
+    terminals = list(tmap.values()) + [default]
 
-    def __int__(self):
-        return int(Op.lparen)
-
-
-opmap = {
-    '(': Op.lparen,
-    ')': Op.rparen,
-    '|': Op.altern,
-    '*': Op.star,
-    '+': Op.plus,
-    '?': Op.maybe,
-    Op.concat: Op.concat, # surprise
-    }
-
-
-def parse_2rp(string):
-    work = ['']
-    for c in '(' + string + ')':
-        if c in ')*?+':
-            work.append(c)
-        elif c in '(|':
+    def lex(self, s):
+        line, off, parenth = 0, 0, 0
+        for (i, c) in enumerate(s):
+            pos = rply.token.SourcePosition(i, line, i - off)
+            t = rply.token.Token(self.tmap.get(c, self.default), c, pos)
             if c == '(':
-                work.append(Op.concat)
-            work.append(c)
-            work.append('')
-            continue
-        else:
-            work.append(Op.concat)
-            work.append(c)
-        dprint(work)
+                parenth += 1
+                t.parenth = parenth
+            yield t
+            if c == '\n':
+                off = i + 1
+                line += 1
 
-    dprint()
-
-    stack = []
-    output = []
-
-    capture = 0
-    for c in work:
-        if c in opmap:
-            op = opmap[c]
-            dprint('        ', op, c)
-            if op == Op.lparen:
-                dprint('        ', '(')
-                stack.append(LParen(capture))
-                capture += 1
-            elif op == Op.rparen:
-                dprint('        ', ')')
-                top = stack.pop()
-                ## if top[0] == Op.lparen:
-                ##     output.append('')
-
-                # will raise IndexError if there are too many )s
-                while not isinstance(top, LParen):
-                    output.append(top)
-                    top = stack.pop()
-                output.append(top.capture)
-                output.append(Op.capture)
-            else:
-                dprint('        ', '-')
-                # will Indexerror if there aren't enough operands ?
-                # XXX: | ?
-                while stack and int(stack[-1]) > int(op):
-                    output.append(stack.pop())
-                stack.append(op)
-        else:
-            output.append(c)
-
-        dprint('%-8s' % (repr(c),), stack, output)
-    output += reversed(stack)
-
-    return output
+lexer = MyLexer()
 
 
-def generate(rp):
-    stack = []
-    for token in rp:
-        if not isinstance(token, Op):
-            if token == '':
-                stack.append([])
-            elif isinstance(token, str):
-                stack.append(
-                    [Instruction('exact', token)]
-                    )
-            else:
-                stack.append(token)
-        elif token == Op.capture:
-            slot = stack.pop()
-            a = stack.pop()
-            stack.append(
-                [Instruction('save', 2 * slot)]
-                + a +
-                [Instruction('save', 2 * slot + 1)]
-                )
-        elif token == Op.concat:
-            b = stack.pop()
-            a = stack.pop()
-            stack.append(a + b)
-        elif token == Op.maybe:
-            if stack[-1]: # ()? -> ()
-                a = stack.pop()
-                stack.append(
-                    [Instruction('skip', 1, len(a) + 1)]
-                    + a
-                    )
-        elif token == Op.plus:
-            if stack[-1]: # ()+ -> ()
-                a = stack.pop()
-                stack.append(
-                    a +
-                    [Instruction('skip', -len(a), 1)]
-                    )
-        elif token == Op.star:
-            if stack[-1]: # ()* -> ()
-                a = stack.pop()
-                stack.append(
-                    [Instruction('skip', 1, len(a) + 2)]
-                    + a +
-                    [Instruction('skip', -len(a) - 1)]
-                    )
-        elif token == Op.altern:
-            b = stack.pop()
-            a = stack.pop()
-            if not a and not b:
-                stack.append([])
-            elif not a or not b: # and b
-                c = a or b
-                stack.append(
-                    [Instruction('skip', 1, len(c) + 1)]
-                    + c
-                    )
-            else:
-                stack.append(
-                    [Instruction('skip', 1, len(a) + 2)]
-                    + a +
-                    [Instruction('skip', len(b) + 1)]
-                    + b
-                    )
+rpg = rply.ParserGenerator(lexer.terminals)
 
-    (result,) = stack
-    result += [Instruction('match')]
-    return result
+@rpg.production('top :')
+def top_nothing(p):
+    return []
+
+@rpg.production('top : re')
+def top_re(p):
+    return p[0]
+
+@rpg.production('re : concat')
+def re_concat(p):
+    return p[0]
+
+@rpg.production('re : re VBAR concat')
+def re_alternate(p):
+    return (
+        [Instruction('skip', 1, len(p[0]) + 2)]
+        + p[0]
+        + [Instruction('skip', len(p[2]) + 1)]
+        + p[2])
+
+@rpg.production('re : VBAR concat')
+def re_leftmaybe(p):
+    return maybe(p[1])
+
+@rpg.production('re : re VBAR')
+def re_rightmaybe(p):
+    return maybe(p[0])
+
+@rpg.production('concat : repeat')
+def concat_1(p):
+    return p[0]
+
+@rpg.production('concat : concat repeat')
+def concat_2(p):
+    return p[0] + p[1]
+
+@rpg.production('single : LPAREN re RPAREN')
+def single_parens(p):
+    return (
+        [Instruction('save', 2 * p[0].parenth)]
+        + p[1]
+        + [Instruction('save', 2 * p[0].parenth + 1)]
+        )
+
+@rpg.production('single : LPAREN RPAREN')
+def single_parens_empty(p):
+    return []
+
+@rpg.production('single : CHAR')
+def single_char(p):
+    return [Instruction('exact', p[0].value)]
+
+@rpg.production('repeat : single')
+def repeat_single(p):
+    return p[0]
+
+@rpg.production('repeat : single STAR')
+def repeat_star(p):
+    return (
+        [Instruction('skip', 1, len(p[0]) + 2)]
+        + p[0]
+        + [Instruction('skip', -len(p[0]) - 1)]
+        )
+
+@rpg.production('repeat : single PLUS')
+def repeat_plus(p):
+    return (
+        p[0]
+        + [Instruction('skip', -len(p[0]), 1)]
+        )
+
+@rpg.production('repeat : single QUESTION')
+def repeat_maybe(p):
+    return ([Instruction('skip', 1, len(p[0]) + 1)]
+            + p[0])
+
+parser = rpg.build()
+
+
+def re_compile(s):
+    return (
+        [Instruction('save', 0)]
+        + parser.parse(lexer.lex(s))
+        + [Instruction('save', 1)]
+        + [Instruction('match')]
+        )
 
 
 def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=None, tick=None, saved=None):
@@ -338,7 +293,7 @@ def trycode(execute, codelet, ostensible, string, expected):
 def tryre(execute, re, string, expected):
     print('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
     dprint()
-    r = execute(generate(parse_2rp(re)), string)
+    r = execute(re_compile(re), string)
     if isinstance(expected, bool):
         r = bool(r)
     if r == expected:
@@ -413,7 +368,7 @@ if __name__ == '__main__':
     tryre(execute_backtrack, 'a*x', 'aaaaaaaaaaaaaaax', True)
 
     # should complete and not hang or bomb out
-    tryre(execute_backtrack, 'a**', 'a', True)
+    tryre(execute_backtrack, '(a*)*', 'a', True)
 
     tryre(execute_threaded, 'cat', 'cat', True)
     tryre(execute_threaded, 'cat', 'dog', False)
@@ -437,7 +392,7 @@ if __name__ == '__main__':
     tryre(execute_threaded, 'a*x', 'aaax', True)
     tryre(execute_threaded, 'a*x', 'aaaaaaaaaaaaaaax', True)
 
-    tryre(execute_threaded, 'a**', 'a', True)
+    tryre(execute_threaded, '(a*)*', 'a', True)
 
     # greed, capturing
     tryre(execute_backtrack, 'a*a', 'aaaaaa', {0: 0, 1: 6})

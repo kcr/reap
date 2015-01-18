@@ -49,7 +49,7 @@ def maybe(codelet):
 
 
 class MyLexer:
-    syntax = '()|*+?.'
+    syntax = r'\()|*+?.'
     default = 'CHAR'
     terminals = list(syntax) + [default]
 
@@ -107,6 +107,17 @@ def concat_1(p):
 def concat_2(p):
     return p[0] + p[1]
 
+@rpg.production('syntax_char : (')
+@rpg.production('syntax_char : )')
+@rpg.production('syntax_char : |')
+@rpg.production('syntax_char : *')
+@rpg.production('syntax_char : +')
+@rpg.production('syntax_char : ?')
+@rpg.production('syntax_char : .')
+@rpg.production('syntax_char : \\')
+def syntax_char(p):
+    return p[0]
+
 @rpg.production('single : ( re )')
 def single_parens(p):
     return (
@@ -122,6 +133,17 @@ def single_parens_empty(p):
 @rpg.production('single : CHAR')
 def single_char(p):
     return [Instruction('exact', p[0].value)]
+
+@rpg.production('single : \\ syntax_char')
+def single_escaped_syntax(p):
+    codelet = [Instruction('exact', p[1].value)]
+    if p[1].value == '(':
+        codelet.append(Instruction('unsave')) #sigh
+    return codelet
+
+@rpg.production('single : \\ CHAR')
+def single_escaped_boring(p):
+    return [Instruction('exact', p[1].value)]
 
 @rpg.production('single : .')
 def single_dot(p):
@@ -155,9 +177,21 @@ parser = rpg.build()
 
 
 def re_compile(s):
+    codelet = parser.parse(lexer.lex(s))
+    off = 0
+    thresh = 0
+    for insn in codelet:
+        if insn.action == 'save':
+            target = insn.rest[0]
+            if insn.rest[0] > thresh:
+                insn.rest = (insn.rest[0] - off,)
+            thresh = target | 1
+        if insn.action == 'unsave':
+            off += 2
+            insn.action='nop'
     return (
         [Instruction('save', 0)]
-        + parser.parse(lexer.lex(s))
+        + codelet
         + [Instruction('save', 1)]
         + [Instruction('match')]
         )
@@ -202,6 +236,8 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                 continue
             elif action == 'save':
                 saved[instruction.rest[0]] = i + off
+            elif action == 'nop':
+                pass
             else:
                 raise Exception('unknown action', action)
 
@@ -243,6 +279,8 @@ def execute_threaded(codelet, string):
             d = dict(saved)
             d[instruction.rest[0]] = cp
             addthread(pool, ip + 1, cp, d, level + 1)
+        elif action == 'nop':
+            addthread(pool, ip + 1, cp, saved, level + 1)
         else:
             dprint(level*' ', '+', i, tick, ip, instruction, saved)
             pool.append((ip, saved))
@@ -389,5 +427,13 @@ if __name__ == '__main__':
                 ('.*abc', 'abc', True),
                 ('.*abc', 'xxxxxxxxxxabc', True),
                 ('.*abc', 'xxxxxxxxxxab', False),
+
+                # \
+                (r'a\.c', 'a.c', True),
+                (r'a\.c', 'abc', False),
+                (r'ab\c', 'abc', True),
+                (r'\(abc', '(abc', True),
+                (r'\(abc', r'\(abc', False),
+                (r'\(ab(c)', '(abc', {0: 0, 1: 4, 2: 3, 5: 4}),
                 ]:
             tryre(execute, regex, string, expected)

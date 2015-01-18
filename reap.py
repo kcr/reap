@@ -49,17 +49,15 @@ def maybe(codelet):
 
 
 class MyLexer:
-    tmap = {
-        '(': 'LPAREN', ')': 'RPAREN', '|': 'VBAR', '*': 'STAR', '+': 'PLUS',
-        '?': 'QUESTION'}
+    syntax = '()|*+?'
     default = 'CHAR'
-    terminals = list(tmap.values()) + [default]
+    terminals = list(syntax) + [default]
 
     def lex(self, s):
         line, off, parenth = 0, 0, 0
         for (i, c) in enumerate(s):
             pos = rply.token.SourcePosition(i, line, i - off)
-            t = rply.token.Token(self.tmap.get(c, self.default), c, pos)
+            t = rply.token.Token(c if c in self.syntax else self.default, c, pos)
             if c == '(':
                 parenth += 1
                 t.parenth = parenth
@@ -85,7 +83,7 @@ def top_re(p):
 def re_concat(p):
     return p[0]
 
-@rpg.production('re : re VBAR concat')
+@rpg.production('re : re | concat')
 def re_alternate(p):
     return (
         [Instruction('skip', 1, len(p[0]) + 2)]
@@ -93,11 +91,11 @@ def re_alternate(p):
         + [Instruction('skip', len(p[2]) + 1)]
         + p[2])
 
-@rpg.production('re : VBAR concat')
+@rpg.production('re : | concat')
 def re_leftmaybe(p):
     return maybe(p[1])
 
-@rpg.production('re : re VBAR')
+@rpg.production('re : re |')
 def re_rightmaybe(p):
     return maybe(p[0])
 
@@ -109,7 +107,7 @@ def concat_1(p):
 def concat_2(p):
     return p[0] + p[1]
 
-@rpg.production('single : LPAREN re RPAREN')
+@rpg.production('single : ( re )')
 def single_parens(p):
     return (
         [Instruction('save', 2 * p[0].parenth)]
@@ -117,7 +115,7 @@ def single_parens(p):
         + [Instruction('save', 2 * p[0].parenth + 1)]
         )
 
-@rpg.production('single : LPAREN RPAREN')
+@rpg.production('single : ( )')
 def single_parens_empty(p):
     return []
 
@@ -129,7 +127,7 @@ def single_char(p):
 def repeat_single(p):
     return p[0]
 
-@rpg.production('repeat : single STAR')
+@rpg.production('repeat : single *')
 def repeat_star(p):
     return (
         [Instruction('skip', 1, len(p[0]) + 2)]
@@ -137,14 +135,14 @@ def repeat_star(p):
         + [Instruction('skip', -len(p[0]) - 1)]
         )
 
-@rpg.production('repeat : single PLUS')
+@rpg.production('repeat : single +')
 def repeat_plus(p):
     return (
         p[0]
         + [Instruction('skip', -len(p[0]), 1)]
         )
 
-@rpg.production('repeat : single QUESTION')
+@rpg.production('repeat : single ?')
 def repeat_maybe(p):
     return ([Instruction('skip', 1, len(p[0]) + 1)]
             + p[0])

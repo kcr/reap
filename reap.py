@@ -49,7 +49,7 @@ def maybe(codelet):
 
 
 class MyLexer:
-    syntax = '()|*+?'
+    syntax = '()|*+?.'
     default = 'CHAR'
     terminals = list(syntax) + [default]
 
@@ -123,6 +123,10 @@ def single_parens_empty(p):
 def single_char(p):
     return [Instruction('exact', p[0].value)]
 
+@rpg.production('single : .')
+def single_dot(p):
+    return [Instruction('any')]
+
 @rpg.production('repeat : single')
 def repeat_single(p):
     return p[0]
@@ -184,6 +188,8 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                     dprint(level*' ', ip, c,'!=', instruction.rest, '-> False')
                     return False
                 process = False
+            elif action == 'any':
+                process = False
             elif action == 'skip':
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
@@ -221,7 +227,7 @@ def execute_threaded(codelet, string):
     i = 0
     match = False
 
-    def addthread(pool, ip, cp, saved):
+    def addthread(pool, ip, cp, saved, level=0):
         if scoreboard[ip] == tick:
             return
 
@@ -229,16 +235,18 @@ def execute_threaded(codelet, string):
 
         instruction = codelet[ip]
         action = instruction.action
+        dprint(level*' ', '\\', i, tick, ip, instruction, saved)
         if action == 'skip':
             for target in codelet[ip].rest:
-                addthread(pool, ip + target, cp, saved)
+                addthread(pool, ip + target, cp, saved, level + 1)
         elif action == 'save':
             d = dict(saved)
             d[instruction.rest[0]] = cp
-            addthread(pool, ip + 1, cp, d)
+            addthread(pool, ip + 1, cp, d, level + 1)
         else:
+            dprint(level*' ', '+', i, tick, ip, instruction, saved)
             pool.append((ip, saved))
-        dprint(i, tick, ip, instruction, saved)
+        #dprint('+', i, tick, ip, instruction, saved)
 
     addthread(currentthreads, 0, 0, {})  # one thread starting at the beginning
 
@@ -256,6 +264,8 @@ def execute_threaded(codelet, string):
                 if c == instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
                 # else failure, thread dies
+            elif action == 'any':
+                addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == 'match':
                 match = saved
                 break
@@ -266,7 +276,7 @@ def execute_threaded(codelet, string):
 
         currentthreads = nextthreads
 
-    return False # really, something went wrong
+    return match
 
 
 debugging = False
@@ -369,5 +379,15 @@ if __name__ == '__main__':
 
                 ('(a*)*', 'a', True), # should complete and not hang or bomb out
                 ('a*a', 'aaaaaa', {0: 0, 1: 6}), # greed, capturing
+
+                # . !
+                ('a.c', 'abc', True),
+                ('a.c', 'adc', True),
+                ('a.c', 'abb', False),
+                ('a.c', 'ac', False),
+
+                ('.*abc', 'abc', True),
+                ('.*abc', 'xxxxxxxxxxabc', True),
+                ('.*abc', 'xxxxxxxxxxab', False),
                 ]:
             tryre(execute, regex, string, expected)

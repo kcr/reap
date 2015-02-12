@@ -126,7 +126,6 @@ def concat_2(state, p):
 @rpg.production('exciting_syntax_char : [')
 @rpg.production('boring_syntax_char : ]')
 @rpg.production('boring_syntax_char : -')
-@rpg.production('boring_syntax_char : ^') # this will of course be exciting someday
 @rpg.production('syntax_char : exciting_syntax_char')
 @rpg.production('syntax_char : boring_syntax_char')
 def syntax_char(state, p):
@@ -150,6 +149,10 @@ def single_parens_empty(state, p):
 @rpg.production('single : $')
 def single_assert_end(state, p):
     return [Instruction('assert_end')]
+
+@rpg.production('single : ^')
+def single_assert_start(state, p):
+    return [Instruction('assert_start')]
 
 @rpg.production('single : CHAR')
 @rpg.production('single : boring_syntax_char')
@@ -300,6 +303,9 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
             elif action == 'assert_end':
                 if c != '':
                     return False
+            elif action == 'assert_start':
+                if i != 0:
+                    return False
             elif action == 'skip':
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
@@ -384,6 +390,9 @@ def execute_threaded(codelet, string):
                 addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'assert_end':
                 if c == '':
+                    addthread(currentthreads.appendleft, ip + 1, i + 1, saved)
+            elif action == 'assert_start':
+                if i == 0:
                     addthread(currentthreads.appendleft, ip + 1, i + 1, saved)
             elif action == '+set':
                 if c in instruction.rest[0]:
@@ -547,7 +556,12 @@ if __name__ == '__main__':
                 (r'x[a-z]ya', 'xgya', True),
                 (r'x[^a-z]ya', 'xXya', True),
 
+                # $
                 (r'abc$', 'abcd', False),
                 (r'abcd$', 'abcd', True),
+
+                # ^
+                (r'^abcd', 'abcdef', True),
+                (r'a^bcd', 'abcdef', False),
                 ]:
             tryre(execute, regex, string, expected)

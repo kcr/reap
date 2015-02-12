@@ -28,6 +28,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+import collections
 import itertools
 
 import rply
@@ -330,13 +331,13 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
 def execute_threaded(codelet, string):
     dprint()
     dprint(codelet)
-    currentthreads = []
+    currentthreads = collections.deque()
     tick = 0
     scoreboard = [None] * len(codelet)
     i = 0
     match = False
 
-    def addthread(pool, ip, cp, saved, level=0):
+    def addthread(add, ip, cp, saved, level=0):
         if scoreboard[ip] == tick:
             return
 
@@ -347,43 +348,49 @@ def execute_threaded(codelet, string):
         dprint(level*' ', '\\', i, tick, ip, instruction, saved)
         if action == 'skip':
             for target in codelet[ip].rest:
-                addthread(pool, ip + target, cp, saved, level + 1)
+                addthread(add, ip + target, cp, saved, level + 1)
         elif action == 'save':
             d = dict(saved)
             d[instruction.rest[0]] = cp
-            addthread(pool, ip + 1, cp, d, level + 1)
+            addthread(add, ip + 1, cp, d, level + 1)
         else:
             dprint(level*' ', '+', i, tick, ip, instruction, saved)
-            pool.append((ip, saved))
+            add((ip, saved))
         #dprint('+', i, tick, ip, instruction, saved)
 
-    addthread(currentthreads, 0, 0, {})  # one thread starting at the beginning
+    addthread(currentthreads.append, 0, 0, {})  # one thread starting at the beginning
 
     dprint(currentthreads)
     for i, c in enumerate(itertools.chain(string, [''])):
         tick += 1
         dprint()
         dprint(repr(c))
-        nextthreads = []
-        for ip, saved in currentthreads:
+        nextthreads = collections.deque()
+
+        def nextthread():
+            while currentthreads:
+                dprint (currentthreads)
+                yield currentthreads.popleft()
+
+        for ip, saved in nextthread():
             instruction = codelet[ip]
             action = instruction.action
             dprint(i, tick, repr(c), ip, instruction, saved)
             if action == 'exact':
                 if c == instruction.rest[0]:
-                    addthread(nextthreads, ip + 1, i + 1, saved)
+                    addthread(nextthreads.append, ip + 1, i + 1, saved)
                 # else failure, thread dies
             elif action == 'any':
-                addthread(nextthreads, ip + 1, i + 1, saved)
+                addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'assert_end':
                 if c == '':
-                    addthread(currentthreads, ip + 1, i + 1, saved)
+                    addthread(currentthreads.appendleft, ip + 1, i + 1, saved)
             elif action == '+set':
                 if c in instruction.rest[0]:
-                    addthread(nextthreads, ip + 1, i + 1, saved)
+                    addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == '-set':
                 if c not in instruction.rest[0]:
-                    addthread(nextthreads, ip + 1, i + 1, saved)
+                    addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'match':
                 match = saved
                 break

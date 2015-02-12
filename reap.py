@@ -365,14 +365,14 @@ def execute_threaded(codelet, string):
                 if c == instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
                 # else failure, thread dies
+            elif action == 'any':
+                addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == '+set':
                 if c in instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == '-set':
                 if c not in instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
-            elif action == 'any':
-                addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == 'match':
                 match = saved
                 break

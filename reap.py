@@ -49,7 +49,7 @@ def maybe(codelet):
 
 
 class MyLexer:
-    syntax = r'\()|*+?.'
+    syntax = r'\()|*+?.[^-]'
     default = 'CHAR'
     terminals = list(syntax) + [default]
 
@@ -107,14 +107,20 @@ def concat_1(p):
 def concat_2(p):
     return p[0] + p[1]
 
-@rpg.production('syntax_char : (')
-@rpg.production('syntax_char : )')
-@rpg.production('syntax_char : |')
-@rpg.production('syntax_char : *')
-@rpg.production('syntax_char : +')
-@rpg.production('syntax_char : ?')
-@rpg.production('syntax_char : .')
-@rpg.production('syntax_char : \\')
+@rpg.production('exciting_syntax_char : (')
+@rpg.production('exciting_syntax_char : )')
+@rpg.production('exciting_syntax_char : |')
+@rpg.production('exciting_syntax_char : *')
+@rpg.production('exciting_syntax_char : +')
+@rpg.production('exciting_syntax_char : ?')
+@rpg.production('exciting_syntax_char : .')
+@rpg.production('exciting_syntax_char : \\')
+@rpg.production('exciting_syntax_char : [')
+@rpg.production('boring_syntax_char : ]')
+@rpg.production('boring_syntax_char : -')
+@rpg.production('boring_syntax_char : ^') # this will of course be exciting someday
+@rpg.production('syntax_char : exciting_syntax_char')
+@rpg.production('syntax_char : boring_syntax_char')
 def syntax_char(p):
     return p[0]
 
@@ -128,9 +134,13 @@ def single_parens(p):
 
 @rpg.production('single : ( )')
 def single_parens_empty(p):
-    return []
+    return [
+        Instruction('save', 2 * p[0].parenth),
+        Instruction('save', 2 * p[0].parenth + 1),
+        ]
 
 @rpg.production('single : CHAR')
+@rpg.production('single : boring_syntax_char')
 def single_char(p):
     return [Instruction('exact', p[0].value)]
 
@@ -149,6 +159,7 @@ def single_escaped_boring(p):
 def single_dot(p):
     return [Instruction('any')]
 
+@rpg.production('single : bracket_expression')
 @rpg.production('repeat : single')
 def repeat_single(p):
     return p[0]
@@ -173,8 +184,50 @@ def repeat_maybe(p):
     return ([Instruction('skip', 1, len(p[0]) + 1)]
             + p[0])
 
-parser = rpg.build()
+@rpg.production('bracket_expression : [ bracket_list ]')
+def bracket_expression(p):
+    charset = p[1]
+    if charset[0] == '^':
+        return [Instruction('-set', expandset(charset[1:]))]
+    else:
+        return [Instruction('+set', expandset(charset))]
 
+@rpg.production('bracket_list_boring_start : CHAR')
+@rpg.production('bracket_list_boring_start : exciting_syntax_char')
+@rpg.production('bracket_list_boring_start : -')
+def bracket_list_boring_start(p):
+    return p[0].value
+
+@rpg.production('bracket_list : bracket_list_boring_start follow_list')
+def bracket_list(p):
+    return p[0] + p[1]
+
+@rpg.production('bracket_list : ] follow_list')
+@rpg.production('bracket_list : ^ follow_list')
+def bracket_list_brack(p):
+    return p[0].value + p[1]
+
+@rpg.production('bracket_list : ^ ] follow_list')
+def bracket_list_brack(p):
+    return p[0].value + p[1].value + p[2]
+
+@rpg.production('follow_list_single : CHAR')
+@rpg.production('follow_list_single : exciting_syntax_char')
+@rpg.production('follow_list_single : -')
+@rpg.production('follow_list_single : ^')
+def follow_list_single(p):
+    return p[0].value
+
+@rpg.production('follow_list : follow_list_single follow_list')
+def follow_list_recurse(p):
+    return p[0] + p[1]
+
+@rpg.production('follow_list : follow_list_single')
+def follow_list_tail(p):
+    return p[0]
+
+
+parser = rpg.build()
 
 def re_compile(s):
     codelet = parser.parse(lexer.lex(s))
@@ -195,6 +248,17 @@ def re_compile(s):
         + [Instruction('save', 1)]
         + [Instruction('match')]
         )
+
+
+def expandset(s):
+    r = ''
+    for i, c in enumerate(s):
+        if c != '-' or i == 0 or i == len(s) - 1:
+            r += c
+        else: # -
+            a, b = ord(s[i - 1]), ord(s[i + 1])
+            r += ''.join(chr(j) for j in range(min(a + 1, b + 1), max(a, b)))
+    return r
 
 
 def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=None, tick=None, saved=None):
@@ -223,6 +287,14 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                     return False
                 process = False
             elif action == 'any':
+                process = False
+            elif action == '+set':
+                if c not in instruction.rest[0]:
+                    return False
+                process = False
+            elif action == '-set':
+                if c in instruction.rest[0]:
+                    return False
                 process = False
             elif action == 'skip':
                 scoreboard[ip] = tick
@@ -302,6 +374,12 @@ def execute_threaded(codelet, string):
                 if c == instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
                 # else failure, thread dies
+            elif action == '+set':
+                if c in instruction.rest[0]:
+                    addthread(nextthreads, ip + 1, i + 1, saved)
+            elif action == '-set':
+                if c not in instruction.rest[0]:
+                    addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == 'any':
                 addthread(nextthreads, ip + 1, i + 1, saved)
             elif action == 'match':
@@ -435,5 +513,29 @@ if __name__ == '__main__':
                 (r'\(abc', '(abc', True),
                 (r'\(abc', r'\(abc', False),
                 (r'\(ab(c)', '(abc', {0: 0, 1: 4, 2: 3, 5: 4}),
+
+                # []
+                (r'x[abc]y', 'xay', True),
+                (r'x[abc]y', 'xby', True),
+                (r'x[abc]y', 'xcy', True),
+                (r'x[abc]y', 'xdy', False),
+                (r'x[abc]y', 'x]y', False),
+                (r'x[]abc]y', 'xay', True),
+                (r'x[]abc]y', 'xby', True),
+                (r'x[]abc]y', 'xcy', True),
+                (r'x[]abc]y', 'xdy', False),
+                (r'x[]abc]y', 'x]y', True),
+                (r'x[^abc]ya', 'xaya', False),
+                (r'x[^abc]ya', 'xbya', False),
+                (r'x[^abc]ya', 'xcya', False),
+                (r'x[^abc]ya', 'xdya', True),
+                (r'x[^abc]ya', 'x]ya', True),
+                (r'x[^]abc]ya', 'xaya', False),
+                (r'x[^]abc]ya', 'xbya', False),
+                (r'x[^]abc]ya', 'xcya', False),
+                (r'x[^]abc]ya', 'xdya', True),
+                (r'x[^]abc]ya', 'x]ya', False),
+                (r'x[a-z]ya', 'xgya', True),
+                (r'x[^a-z]ya', 'xXya', True),
                 ]:
             tryre(execute, regex, string, expected)

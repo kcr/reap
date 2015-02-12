@@ -555,6 +555,8 @@ if __name__ == '__main__':
                 (r'x[^]abc]ya', 'x]ya', False),
                 (r'x[a-z]ya', 'xgya', True),
                 (r'x[^a-z]ya', 'xXya', True),
+                (r'x[^^]y', 'x^y', False),
+                (r'x[a^]y', 'x^y', True),
 
                 # $
                 (r'abc$', 'abcd', False),

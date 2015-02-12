@@ -54,13 +54,13 @@ class MyLexer:
     terminals = list(syntax) + [default]
 
     def lex(self, s):
-        line, off, parenth = 0, 0, 0
+        line, off, parenc = 0, 0, 0
         for (i, c) in enumerate(s):
             pos = rply.token.SourcePosition(i, line, i - off)
             t = rply.token.Token(c if c in self.syntax else self.default, c, pos)
             if c == '(':
-                parenth += 1
-                t.parenth = parenth
+                parenc += 1
+                t.parenc = parenc
             yield t
             if c == '\n':
                 off = i + 1
@@ -69,22 +69,27 @@ class MyLexer:
 lexer = MyLexer()
 
 
+class ParseState:
+    def __init__(self):
+        self.unparen = 0
+
+
 rpg = rply.ParserGenerator(lexer.terminals)
 
 @rpg.production('top :')
-def top_nothing(p):
+def top_nothing(state, p):
     return []
 
 @rpg.production('top : re')
-def top_re(p):
+def top_re(state, p):
     return p[0]
 
 @rpg.production('re : concat')
-def re_concat(p):
+def re_concat(state, p):
     return p[0]
 
 @rpg.production('re : re | concat')
-def re_alternate(p):
+def re_alternate(state, p):
     return (
         [Instruction('skip', 1, len(p[0]) + 2)]
         + p[0]
@@ -92,19 +97,19 @@ def re_alternate(p):
         + p[2])
 
 @rpg.production('re : | concat')
-def re_leftmaybe(p):
+def re_leftmaybe(state, p):
     return maybe(p[1])
 
 @rpg.production('re : re |')
-def re_rightmaybe(p):
+def re_rightmaybe(state, p):
     return maybe(p[0])
 
 @rpg.production('concat : repeat')
-def concat_1(p):
+def concat_1(state, p):
     return p[0]
 
 @rpg.production('concat : concat repeat')
-def concat_2(p):
+def concat_2(state, p):
     return p[0] + p[1]
 
 @rpg.production('exciting_syntax_char : (')
@@ -121,51 +126,51 @@ def concat_2(p):
 @rpg.production('boring_syntax_char : ^') # this will of course be exciting someday
 @rpg.production('syntax_char : exciting_syntax_char')
 @rpg.production('syntax_char : boring_syntax_char')
-def syntax_char(p):
+def syntax_char(state, p):
     return p[0]
 
 @rpg.production('single : ( re )')
-def single_parens(p):
+def single_parens(state, p):
     return (
-        [Instruction('save', 2 * p[0].parenth)]
+        [Instruction('save', 2 * (p[0].parenc - state.unparen))]
         + p[1]
-        + [Instruction('save', 2 * p[0].parenth + 1)]
+        + [Instruction('save', 2 * (p[0].parenc - state.unparen) + 1)]
         )
 
 @rpg.production('single : ( )')
-def single_parens_empty(p):
+def single_parens_empty(state, p):
     return [
-        Instruction('save', 2 * p[0].parenth),
-        Instruction('save', 2 * p[0].parenth + 1),
+        Instruction('save', 2 * (p[0].parenc - state.unparen)),
+        Instruction('save', 2 * (p[0].parenc - state.unparen) + 1),
         ]
 
 @rpg.production('single : CHAR')
 @rpg.production('single : boring_syntax_char')
-def single_char(p):
+def single_char(state, p):
     return [Instruction('exact', p[0].value)]
 
 @rpg.production('single : \\ syntax_char')
-def single_escaped_syntax(p):
+def single_escaped_syntax(state, p):
     codelet = [Instruction('exact', p[1].value)]
     if p[1].value == '(':
-        codelet.append(Instruction('unsave')) #sigh
+        state.unparen += 1
     return codelet
 
 @rpg.production('single : \\ CHAR')
-def single_escaped_boring(p):
+def single_escaped_boring(state, p):
     return [Instruction('exact', p[1].value)]
 
 @rpg.production('single : .')
-def single_dot(p):
+def single_dot(state, p):
     return [Instruction('any')]
 
 @rpg.production('single : bracket_expression')
 @rpg.production('repeat : single')
-def repeat_single(p):
+def repeat_single(state, p):
     return p[0]
 
 @rpg.production('repeat : single *')
-def repeat_star(p):
+def repeat_star(state, p):
     return (
         [Instruction('skip', 1, len(p[0]) + 2)]
         + p[0]
@@ -173,19 +178,19 @@ def repeat_star(p):
         )
 
 @rpg.production('repeat : single +')
-def repeat_plus(p):
+def repeat_plus(state, p):
     return (
         p[0]
         + [Instruction('skip', -len(p[0]), 1)]
         )
 
 @rpg.production('repeat : single ?')
-def repeat_maybe(p):
+def repeat_maybe(state, p):
     return ([Instruction('skip', 1, len(p[0]) + 1)]
             + p[0])
 
 @rpg.production('bracket_expression : [ bracket_list ]')
-def bracket_expression(p):
+def bracket_expression(state, p):
     charset = p[1]
     if charset[0] == '^':
         return [Instruction('-set', expandset(charset[1:]))]
@@ -195,53 +200,42 @@ def bracket_expression(p):
 @rpg.production('bracket_list_boring_start : CHAR')
 @rpg.production('bracket_list_boring_start : exciting_syntax_char')
 @rpg.production('bracket_list_boring_start : -')
-def bracket_list_boring_start(p):
+def bracket_list_boring_start(state, p):
     return p[0].value
 
 @rpg.production('bracket_list : bracket_list_boring_start follow_list')
-def bracket_list(p):
+def bracket_list(state, p):
     return p[0] + p[1]
 
 @rpg.production('bracket_list : ] follow_list')
 @rpg.production('bracket_list : ^ follow_list')
-def bracket_list_brack(p):
+def bracket_list_brack(state, p):
     return p[0].value + p[1]
 
 @rpg.production('bracket_list : ^ ] follow_list')
-def bracket_list_brack(p):
+def bracket_list_brack(state, p):
     return p[0].value + p[1].value + p[2]
 
 @rpg.production('follow_list_single : CHAR')
 @rpg.production('follow_list_single : exciting_syntax_char')
 @rpg.production('follow_list_single : -')
 @rpg.production('follow_list_single : ^')
-def follow_list_single(p):
+def follow_list_single(state, p):
     return p[0].value
 
 @rpg.production('follow_list : follow_list_single follow_list')
-def follow_list_recurse(p):
+def follow_list_recurse(state, p):
     return p[0] + p[1]
 
 @rpg.production('follow_list : follow_list_single')
-def follow_list_tail(p):
+def follow_list_tail(state, p):
     return p[0]
 
 
 parser = rpg.build()
 
 def re_compile(s):
-    codelet = parser.parse(lexer.lex(s))
-    off = 0
-    thresh = 0
-    for insn in codelet:
-        if insn.action == 'save':
-            target = insn.rest[0]
-            if insn.rest[0] > thresh:
-                insn.rest = (insn.rest[0] - off,)
-            thresh = target | 1
-        if insn.action == 'unsave':
-            off += 2
-            insn.action='nop'
+    codelet = parser.parse(lexer.lex(s), state=ParseState())
     return (
         [Instruction('save', 0)]
         + codelet
@@ -308,8 +302,6 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                 continue
             elif action == 'save':
                 saved[instruction.rest[0]] = i + off
-            elif action == 'nop':
-                pass
             else:
                 raise Exception('unknown action', action)
 
@@ -351,8 +343,6 @@ def execute_threaded(codelet, string):
             d = dict(saved)
             d[instruction.rest[0]] = cp
             addthread(pool, ip + 1, cp, d, level + 1)
-        elif action == 'nop':
-            addthread(pool, ip + 1, cp, saved, level + 1)
         else:
             dprint(level*' ', '+', i, tick, ip, instruction, saved)
             pool.append((ip, saved))
@@ -512,7 +502,7 @@ if __name__ == '__main__':
                 (r'ab\c', 'abc', True),
                 (r'\(abc', '(abc', True),
                 (r'\(abc', r'\(abc', False),
-                (r'\(ab(c)', '(abc', {0: 0, 1: 4, 2: 3, 5: 4}),
+                (r'\(ab(c)', '(abc', {0: 0, 1: 4, 2: 3, 3: 4}),
 
                 # []
                 (r'x[abc]y', 'xay', True),

@@ -50,7 +50,7 @@ def maybe(codelet):
 
 
 class MyLexer:
-    syntax = r'\()|*+?.[^-]'
+    syntax = r'\()|*+?.$[^-]'
     default = 'CHAR'
     terminals = list(syntax) + [default]
 
@@ -121,6 +121,7 @@ def concat_2(state, p):
 @rpg.production('exciting_syntax_char : ?')
 @rpg.production('exciting_syntax_char : .')
 @rpg.production('exciting_syntax_char : \\')
+@rpg.production('exciting_syntax_char : $')
 @rpg.production('exciting_syntax_char : [')
 @rpg.production('boring_syntax_char : ]')
 @rpg.production('boring_syntax_char : -')
@@ -144,6 +145,10 @@ def single_parens_empty(state, p):
         Instruction('save', 2 * (p[0].parenc - state.unparen)),
         Instruction('save', 2 * (p[0].parenc - state.unparen) + 1),
         ]
+
+@rpg.production('single : $')
+def single_assert_end(state, p):
+    return [Instruction('assert_end')]
 
 @rpg.production('single : CHAR')
 @rpg.production('single : boring_syntax_char')
@@ -291,6 +296,9 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                 if c in instruction.rest[0]:
                     return False
                 process = False
+            elif action == 'assert_end':
+                if c != '':
+                    return False
             elif action == 'skip':
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
@@ -367,6 +375,9 @@ def execute_threaded(codelet, string):
                 # else failure, thread dies
             elif action == 'any':
                 addthread(nextthreads, ip + 1, i + 1, saved)
+            elif action == 'assert_end':
+                if c == '':
+                    addthread(currentthreads, ip + 1, i + 1, saved)
             elif action == '+set':
                 if c in instruction.rest[0]:
                     addthread(nextthreads, ip + 1, i + 1, saved)
@@ -528,5 +539,8 @@ if __name__ == '__main__':
                 (r'x[^]abc]ya', 'x]ya', False),
                 (r'x[a-z]ya', 'xgya', True),
                 (r'x[^a-z]ya', 'xXya', True),
+
+                (r'abc$', 'abcd', False),
+                (r'abcd$', 'abcd', True),
                 ]:
             tryre(execute, regex, string, expected)

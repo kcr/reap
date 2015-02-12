@@ -28,6 +28,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+import itertools
 
 import rply
 import rply.token
@@ -263,7 +264,7 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
     if scoreboard is None:
         scoreboard = [None] * len(codelet)
 
-    for i, c in enumerate(string + '$'):#XXX need a better end sigil
+    for i, c in enumerate(itertools.chain(string, [''])):
         process = True
         while process:
             if scoreboard[ip] == tick:
@@ -351,7 +352,7 @@ def execute_threaded(codelet, string):
     addthread(currentthreads, 0, 0, {})  # one thread starting at the beginning
 
     dprint(currentthreads)
-    for i, c in enumerate(string + '$'):
+    for i, c in enumerate(itertools.chain(string, [''])):
         tick += 1
         dprint()
         dprint(repr(c))

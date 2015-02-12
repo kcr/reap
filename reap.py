@@ -50,6 +50,14 @@ def maybe(codelet):
     return [Instruction('skip', 1, len(codelet) + 1)] + codelet
 
 
+def save(n, codelet):
+    return (
+        [Instruction('save', 2 * n)]
+        + codelet
+        + [Instruction('save', 2 * n + 1)]
+        )
+
+
 class MyLexer:
     syntax = r'\()|*+?.$[^-]'
     default = 'CHAR'
@@ -133,18 +141,11 @@ def syntax_char(state, p):
 
 @rpg.production('single : ( re )')
 def single_parens(state, p):
-    return (
-        [Instruction('save', 2 * (p[0].parenc - state.unparen))]
-        + p[1]
-        + [Instruction('save', 2 * (p[0].parenc - state.unparen) + 1)]
-        )
+    return save(p[0].parenc - state.unparen, p[1])
 
 @rpg.production('single : ( )')
 def single_parens_empty(state, p):
-    return [
-        Instruction('save', 2 * (p[0].parenc - state.unparen)),
-        Instruction('save', 2 * (p[0].parenc - state.unparen) + 1),
-        ]
+    return save(p[0].parenc - state.unparen, [])
 
 @rpg.production('single : $')
 def single_assert_end(state, p):
@@ -245,12 +246,7 @@ parser = rpg.build()
 
 def re_compile(s):
     codelet = parser.parse(lexer.lex(s), state=ParseState())
-    return (
-        [Instruction('save', 0)]
-        + codelet
-        + [Instruction('save', 1)]
-        + [Instruction('match')]
-        )
+    return save(0, codelet) + [Instruction('match')]
 
 
 def expandset(s):

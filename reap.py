@@ -196,8 +196,7 @@ def repeat_plus(state, p):
 
 @rpg.production('repeat : single ?')
 def repeat_maybe(state, p):
-    return ([Instruction('skip', 1, len(p[0]) + 1)]
-            + p[0])
+    return maybe(p[0])
 
 @rpg.production('bracket_expression : [ bracket_list ]')
 def bracket_expression(state, p):

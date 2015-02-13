@@ -201,11 +201,11 @@ def repeat_maybe(state, p):
 
 @rpg.production('bracket_expression : [ bracket_list ]')
 def bracket_expression(state, p):
-    charset = p[1]
-    if charset[0] == '^':
-        return [Instruction('-set', expandset(charset[1:]))]
+    charclass = p[1]
+    if charclass[0] == '^':
+        return [Instruction('-class', expandclass(charclass[1:]))]
     else:
-        return [Instruction('+set', expandset(charset))]
+        return [Instruction('+class', expandclass(charclass))]
 
 @rpg.production('bracket_list_boring_start : CHAR')
 @rpg.production('bracket_list_boring_start : exciting_syntax_char')
@@ -249,7 +249,7 @@ def re_compile(s):
     return save(0, codelet) + [Instruction('match')]
 
 
-def expandset(s):
+def expandclass(s):
     r = ''
     for i, c in enumerate(s):
         if c != '-' or i == 0 or i == len(s) - 1:
@@ -287,11 +287,11 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                 process = False
             elif action == 'any':
                 process = False
-            elif action == '+set':
+            elif action == '+class':
                 if c not in instruction.rest[0]:
                     return False
                 process = False
-            elif action == '-set':
+            elif action == '-class':
                 if c in instruction.rest[0]:
                     return False
                 process = False
@@ -389,10 +389,10 @@ def execute_threaded(codelet, string):
             elif action == 'assert_start':
                 if i == 0:
                     addthread(currentthreads.appendleft, ip + 1, i + 1, saved)
-            elif action == '+set':
+            elif action == '+class':
                 if c in instruction.rest[0]:
                     addthread(nextthreads.append, ip + 1, i + 1, saved)
-            elif action == '-set':
+            elif action == '-class':
                 if c not in instruction.rest[0]:
                     addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'match':

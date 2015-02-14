@@ -60,6 +60,14 @@ def save(n, codelet):
         )
 
 
+def kleene(codelet):
+    return (
+        [Instruction('skip', 1, len(codelet) + 2)]
+        + codelet
+        + [Instruction('skip', -len(codelet) - 1)]
+        )
+
+
 class MyLexer:
     syntax = r'\()|*+?.$[^-]'
     default = 'CHAR'
@@ -184,11 +192,7 @@ def repeat_single(state, p):
 
 @rpg.production('repeat : single *')
 def repeat_star(state, p):
-    return (
-        [Instruction('skip', 1, len(p[0]) + 2)]
-        + p[0]
-        + [Instruction('skip', -len(p[0]) - 1)]
-        )
+    return kleene(p[0])
 
 @rpg.production('repeat : single +')
 def repeat_plus(state, p):
@@ -409,6 +413,52 @@ def execute_threaded(codelet, string):
 
     return match
 
+BACKTRACK = 1<<0
+
+
+class ReapPattern:
+    def __init__(self, pattern, flags = 0):
+        self.pattern = pattern
+        self.flags = flags
+        self.forward = save(
+            0,
+            parser.parse(lexer.lex(pattern), state=ParseState()))
+
+    def match(self, string): # pos, endpos
+        return self.execute(
+            string,
+            save(0, self.forward) + [Instruction('match')])
+
+    def search(self, string): # pos, endpos
+        return self.execute(
+            string,
+            kleene([Instruction('any')])
+            + save(0, self.forward)
+            + [Instruction('match')])
+
+    def execute(self, string, codelet):
+        x = execute_threaded
+        if self.flags & BACKTRACK:
+            x = execute_backtrack
+        result = x(codelet, string)
+        if result:
+            return ReapMatch(string, result)
+        return None
+
+#compile=ReapPattern
+
+
+class ReapMatch:
+    def __init__(self, string, result):
+        self.string = string
+        self.result = result
+
+    def __repr__(self):
+        return (
+            'ReapMatch(' +
+            ', '.join(str(x) for x in (self.string, self.result))
+            + ')')
+
 
 debugging = False
 def dprint(*args, **kw):
@@ -439,20 +489,23 @@ def trycode(execute, codelet, ostensible, string, expected):
         raise
 
 
-def tryre(execute, re, string, expected):
+def tryre(flags, re, string, expected):
     try:
         sys.stdout.write('.')
         sys.stdout.flush()
         dprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
         dprint()
-        r = execute(re_compile(re), string)
+        r = ReapPattern(re, flags)
+        m = r.match(string)
         if isinstance(expected, bool):
-            r = bool(r)
-        if r == expected:
-            dprint('Got ', r)
+            result = bool(m) == expected
+        else:
+            result = m.result == expected
+        if result:
+            dprint('Got ', m)
         else:
             nprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
-            print('Got', r, 'expected', expected)
+            print('Got', m, 'expected', expected)
         dprint()
     except:
         print('while trying', string, 'against', re, 'with', execute.__name__, end=': ')
@@ -504,7 +557,7 @@ if __name__ == '__main__':
     print()
 
     print('patterns:', end='')
-    for execute in [execute_backtrack, execute_threaded]:
+    for flags in [BACKTRACK, 0]:
         for (regex, string, expected) in [
                 ('cat', 'cat', True),
                 ('cat', 'dog', False),
@@ -583,5 +636,5 @@ if __name__ == '__main__':
                 (r'^abcd', 'abcdef', True),
                 (r'a^bcd', 'abcdef', False),
                 ]:
-            tryre(execute, regex, string, expected)
+            tryre(flags, regex, string, expected)
     print()

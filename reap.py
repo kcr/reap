@@ -28,6 +28,8 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+import sys
+
 import collections
 import itertools
 
@@ -413,34 +415,51 @@ def dprint(*args, **kw):
     if debugging:
         return print(*args, **kw)
 
+def nprint(*args, **kw):
+    if not debugging:
+        return print(*args, **kw)
+
 
 def trycode(execute, codelet, ostensible, string, expected):
-    print('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end=': ')
-    dprint()
-    r = execute(codelet, string)
-    if isinstance(expected, bool):
-        r = bool(r)
-    if r == expected:
-        print('Got', r)
-    else:
-        print('Got', r, 'expected', expected)
-    dprint()
+    try:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        dprint('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end=': ')
+        r = execute(codelet, string)
+        if isinstance(expected, bool):
+            r = bool(r)
+        if r == expected:
+            dprint('Got ', r)
+        else:
+            nprint('Trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end =': ')
+            print('Got', r, 'expected', expected)
+        dprint()
+    except:
+        print('while trying', string, 'against the ostensible', ostensible, 'with', execute.__name__, end=': ')
+        raise
 
 
 def tryre(execute, re, string, expected):
-    print('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
-    dprint()
-    r = execute(re_compile(re), string)
-    if isinstance(expected, bool):
-        r = bool(r)
-    if r == expected:
-        print('Got', r)
-    else:
-        print('Got', r, 'expected', expected)
-    dprint()
-
+    try:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        dprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
+        dprint()
+        r = execute(re_compile(re), string)
+        if isinstance(expected, bool):
+            r = bool(r)
+        if r == expected:
+            dprint('Got ', r)
+        else:
+            nprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
+            print('Got', r, 'expected', expected)
+        dprint()
+    except:
+        print('while trying', string, 'against', re, 'with', execute.__name__, end=': ')
+        raise
 
 if __name__ == '__main__':
+    print('pre-compiled codelets:', end='')
     codelet0 = [
         Instruction('save', 0),
         Instruction('exact', 'c'),
@@ -482,6 +501,9 @@ if __name__ == '__main__':
     trycode(execute_threaded, codelet1, 'cat|dog', 'catx', True)
     trycode(execute_threaded, codelet1, 'cat|dog', 'ca', False)
 
+    print()
+
+    print('patterns:', end='')
     for execute in [execute_backtrack, execute_threaded]:
         for (regex, string, expected) in [
                 ('cat', 'cat', True),
@@ -562,3 +584,4 @@ if __name__ == '__main__':
                 (r'a^bcd', 'abcdef', False),
                 ]:
             tryre(execute, regex, string, expected)
+    print()

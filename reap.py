@@ -45,7 +45,10 @@ class Instruction:
         self.tick = None
 
     def __repr__(self):
-        return '<%s%s>' % (self.action, ''.join(' ' + repr(x) for x in self.rest))
+        return '<' + str(self) + '>'
+
+    def __str__(self):
+        return ' '.join([self.action] + [repr(x) for x in self.rest])
 
 
 def maybe(codelet):
@@ -413,16 +416,18 @@ def execute_threaded(codelet, string):
 
     return match
 
-BACKTRACK = 1<<0
+BACKTRACK  = 1<<0
+DEBUG      = 1<<1
 
 
 class ReapPattern:
     def __init__(self, pattern, flags = 0):
         self.pattern = pattern
         self.flags = flags
-        self.forward = save(
-            0,
-            parser.parse(lexer.lex(pattern), state=ParseState()))
+        self.forward = parser.parse(lexer.lex(pattern), state=ParseState())
+        if flags & DEBUG:
+            for i in self.forward:
+                print(i)
 
     def match(self, string): # pos, endpos
         return self.execute(

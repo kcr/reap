@@ -517,6 +517,7 @@ def tryre(flags, re, string, expected):
         raise
 
 if __name__ == '__main__':
+    print()
     print('pre-compiled codelets:', end='')
     codelet0 = [
         Instruction('save', 0),

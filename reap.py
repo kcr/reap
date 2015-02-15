@@ -250,12 +250,7 @@ def follow_list_recurse(state, p):
 def follow_list_tail(state, p):
     return p[0]
 
-
 parser = rpg.build()
-
-def re_compile(s):
-    codelet = parser.parse(lexer.lex(s), state=ParseState())
-    return save(0, codelet) + [Instruction('match')]
 
 
 def expandclass(s):

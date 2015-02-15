@@ -93,8 +93,9 @@ lexer = MyLexer()
 
 
 class ParseState:
-    def __init__(self):
+    def __init__(self, flags):
         self.unparen = 0
+        self.flags = flags
 
 
 rpg = rply.ParserGenerator(lexer.terminals)
@@ -171,7 +172,10 @@ def single_assert_start(state, p):
 @rpg.production('single : CHAR')
 @rpg.production('single : boring_syntax_char')
 def single_char(state, p):
-    return [Instruction('exact', p[0].value)]
+    if state.flags & IGNORECASE:
+        return [Instruction('inexact', p[0].value)]
+    else:
+        return [Instruction('exact', p[0].value)]
 
 @rpg.production('single : \\ syntax_char')
 def single_escaped_syntax(state, p):
@@ -289,6 +293,10 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                     dprint(level*' ', ip, c,'!=', instruction.rest, '-> False')
                     return False
                 process = False
+            elif action == 'inexact':
+                if c.lower() != instruction.rest[0].lower():
+                    return False
+                process = False
             elif action == 'any':
                 process = False
             elif action == '+class':
@@ -385,6 +393,9 @@ def execute_threaded(codelet, string):
                 if c == instruction.rest[0]:
                     addthread(nextthreads.append, ip + 1, i + 1, saved)
                 # else failure, thread dies
+            if action == 'inexact':
+                if c.lower() == instruction.rest[0].lower():
+                    addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'any':
                 addthread(nextthreads.append, ip + 1, i + 1, saved)
             elif action == 'assert_end':
@@ -413,13 +424,15 @@ def execute_threaded(codelet, string):
 
 BACKTRACK  = 1<<0
 DEBUG      = 1<<1
+IGNORECASE = 1<<2 ; I = IGNORECASE
 
 
 class ReapPattern:
     def __init__(self, pattern, flags = 0):
         self.pattern = pattern
         self.flags = flags
-        self.forward = parser.parse(lexer.lex(pattern), state=ParseState())
+        self.forward = parser.parse(
+            lexer.lex(pattern), state=ParseState(self.flags))
         if flags & DEBUG:
             for i in self.forward:
                 print(i)
@@ -558,84 +571,91 @@ if __name__ == '__main__':
     print()
 
     print('patterns:', end='')
-    for flags in [BACKTRACK, 0]:
-        for (regex, string, expected) in [
-                ('cat', 'cat', True),
-                ('cat', 'dog', False),
-                ('cat', 'dot', False),
-                ('cat|dog', 'cat', True),
-                ('cat|dog', 'dog', True),
-                ('cat|dog', 'dot', False),
-                ('cat|dog', 'catx', True),
-                ('cat|dog', 'ca', False),
+    for oflags in [BACKTRACK, 0]:
+        for (regex, flags, string, expected) in [
+                ('cat', 0, 'cat', True),
+                ('cat', 0, 'dog', False),
+                ('cat', 0, 'dot', False),
+                ('cat|dog', 0, 'cat', True),
+                ('cat|dog', 0, 'dog', True),
+                ('cat|dog', 0, 'dot', False),
+                ('cat|dog', 0, 'catx', True),
+                ('cat|dog', 0, 'ca', False),
 
-                ('ab(gh|)', 'ab', True),
-                ('ab(gh|)', 'abxgh', True),
-                ('ab(gh|)', 'abgh', True),
-                ('ab(gh|xy)', 'ab', False),
-                ('ab(gh|xy)', 'abgh', True),
-                ('ab(gh|xy)', 'abxy', True),
+                ('ab(gh|)', 0, 'ab', True),
+                ('ab(gh|)', 0, 'abxgh', True),
+                ('ab(gh|)', 0, 'abgh', True),
+                ('ab(gh|xy)', 0, 'ab', False),
+                ('ab(gh|xy)', 0, 'abgh', True),
+                ('ab(gh|xy)', 0, 'abxy', True),
 
-                ('a*x', 'x', True),
-                ('a*x', 'ax', True),
-                ('a*x', 'aax', True),
-                ('a*x', 'aaax', True),
-                ('a*x', 'aaaaaaaaaaaaaaax', True),
+                ('a*x', 0, 'x', True),
+                ('a*x', 0, 'ax', True),
+                ('a*x', 0, 'aax', True),
+                ('a*x', 0, 'aaax', True),
+                ('a*x', 0, 'aaaaaaaaaaaaaaax', True),
 
-                ('(a*)*', 'a', True), # should complete and not hang or bomb out
-                ('a*a', 'aaaaaa', {0: 0, 1: 6}), # greed, capturing
+                ('(a*)*', 0, 'a', True), # should complete and not hang or bomb out
+                ('a*a', 0, 'aaaaaa', {0: 0, 1: 6}), # greed, capturing
 
                 # . !
-                ('a.c', 'abc', True),
-                ('a.c', 'adc', True),
-                ('a.c', 'abb', False),
-                ('a.c', 'ac', False),
+                ('a.c', 0, 'abc', True),
+                ('a.c', 0, 'adc', True),
+                ('a.c', 0, 'abb', False),
+                ('a.c', 0, 'ac', False),
 
-                ('.*abc', 'abc', True),
-                ('.*abc', 'xxxxxxxxxxabc', True),
-                ('.*abc', 'xxxxxxxxxxab', False),
+                ('.*abc', 0, 'abc', True),
+                ('.*abc', 0, 'xxxxxxxxxxabc', True),
+                ('.*abc', 0, 'xxxxxxxxxxab', False),
 
                 # \
-                (r'a\.c', 'a.c', True),
-                (r'a\.c', 'abc', False),
-                (r'ab\c', 'abc', True),
-                (r'\(abc', '(abc', True),
-                (r'\(abc', r'\(abc', False),
-                (r'\(ab(c)', '(abc', {0: 0, 1: 4, 2: 3, 3: 4}),
+                (r'a\.c', 0, 'a.c', True),
+                (r'a\.c', 0, 'abc', False),
+                (r'ab\c', 0, 'abc', True),
+                (r'\(abc', 0, '(abc', True),
+                (r'\(abc', 0, r'\(abc', False),
+                (r'\(ab(c)', 0, '(abc', {0: 0, 1: 4, 2: 3, 3: 4}),
 
                 # []
-                (r'x[abc]y', 'xay', True),
-                (r'x[abc]y', 'xby', True),
-                (r'x[abc]y', 'xcy', True),
-                (r'x[abc]y', 'xdy', False),
-                (r'x[abc]y', 'x]y', False),
-                (r'x[]abc]y', 'xay', True),
-                (r'x[]abc]y', 'xby', True),
-                (r'x[]abc]y', 'xcy', True),
-                (r'x[]abc]y', 'xdy', False),
-                (r'x[]abc]y', 'x]y', True),
-                (r'x[^abc]ya', 'xaya', False),
-                (r'x[^abc]ya', 'xbya', False),
-                (r'x[^abc]ya', 'xcya', False),
-                (r'x[^abc]ya', 'xdya', True),
-                (r'x[^abc]ya', 'x]ya', True),
-                (r'x[^]abc]ya', 'xaya', False),
-                (r'x[^]abc]ya', 'xbya', False),
-                (r'x[^]abc]ya', 'xcya', False),
-                (r'x[^]abc]ya', 'xdya', True),
-                (r'x[^]abc]ya', 'x]ya', False),
-                (r'x[a-z]ya', 'xgya', True),
-                (r'x[^a-z]ya', 'xXya', True),
-                (r'x[^^]y', 'x^y', False),
-                (r'x[a^]y', 'x^y', True),
+                (r'x[abc]y', 0, 'xay', True),
+                (r'x[abc]y', 0, 'xby', True),
+                (r'x[abc]y', 0, 'xcy', True),
+                (r'x[abc]y', 0, 'xdy', False),
+                (r'x[abc]y', 0, 'x]y', False),
+                (r'x[]abc]y', 0, 'xay', True),
+                (r'x[]abc]y', 0, 'xby', True),
+                (r'x[]abc]y', 0, 'xcy', True),
+                (r'x[]abc]y', 0, 'xdy', False),
+                (r'x[]abc]y', 0, 'x]y', True),
+                (r'x[^abc]ya', 0, 'xaya', False),
+                (r'x[^abc]ya', 0, 'xbya', False),
+                (r'x[^abc]ya', 0, 'xcya', False),
+                (r'x[^abc]ya', 0, 'xdya', True),
+                (r'x[^abc]ya', 0, 'x]ya', True),
+                (r'x[^]abc]ya', 0, 'xaya', False),
+                (r'x[^]abc]ya', 0, 'xbya', False),
+                (r'x[^]abc]ya', 0, 'xcya', False),
+                (r'x[^]abc]ya', 0, 'xdya', True),
+                (r'x[^]abc]ya', 0, 'x]ya', False),
+                (r'x[a-z]ya', 0, 'xgya', True),
+                (r'x[^a-z]ya', 0, 'xXya', True),
+                (r'x[^^]y', 0, 'x^y', False),
+                (r'x[a^]y', 0, 'x^y', True),
 
                 # $
-                (r'abc$', 'abcd', False),
-                (r'abcd$', 'abcd', True),
+                (r'abc$', 0, 'abcd', False),
+                (r'abcd$', 0, 'abcd', True),
 
                 # ^
-                (r'^abcd', 'abcdef', True),
-                (r'a^bcd', 'abcdef', False),
+                (r'^abcd', 0, 'abcdef', True),
+                (r'a^bcd', 0, 'abcdef', False),
+
+                # IGNORECASE
+                (r'a', IGNORECASE, 'a', True),
+                (r'a', IGNORECASE, 'A', True),
+                (r'b', IGNORECASE, 'A', False),
+                (r'a+', IGNORECASE, 'aAAAaa', True),
                 ]:
-            tryre(flags, regex, string, expected)
+            tryre(oflags|flags, regex, string, expected)
     print()
+

@@ -93,16 +93,161 @@ lexer = MyLexer()
 
 
 class ParseState:
-    def __init__(self, flags):
+    def __init__(self):
         self.unparen = 0
-        self.flags = flags
+
+
+class AST:
+    static = []
+
+    def __init__(self, *args):
+        self.children = args
+
+    def forward_realize(self, flags):
+        return [c.forward(flags) for c in self.children]
+
+    def forward(self, flags):
+        return self.do(self.forward_realize(flags), flags)
+
+    def backward_realize(self, flags):
+        return [c.backward(flags) for c in reversed(self.children)]
+
+    def backward(self, flags):
+        return self.do(self.backward_realize(flags), flags)
+
+    def do(self, children, flags):
+        return self.static
+
+    def __repr__(self):
+        return '%s(%s)' % (
+            self.__class__.__name__,
+            ', '.join(repr(c) for c in self.children),
+            )
+
+
+class AST0(AST):
+    def __init__(self):
+        super().__init__()
+
+
+class AST1(AST):
+    def __init__(self, a):
+        super().__init__(a)
+
+
+class AST2(AST):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
+class Nowt(AST0):
+    pass
+
+
+class Concat(AST2):
+    def forward(self, flags):
+        return list(itertools.chain.from_iterable(self.forward_realize(flags)))
+
+    def backward(self, flags):
+        return list(itertools.chain.from_iterable(self.backward_realize(flags)))
+
+
+class Alternative(AST2):
+    def do(self, c, flags):
+        return (
+            [Instruction('skip', 1, len(c[0]) + 2)]
+            + c[0]
+            + [Instruction('skip', len(c[1]) + 1)]
+            + c[1])
+
+
+class Question(AST1):
+    def do(self, c, flags):
+        return maybe(c[0])
+
+
+class Save(AST):
+    def __init__(self, n, child):
+        self.n = n
+        super().__init__(child)
+
+    def do(self, c, flags):
+        return save(self.n, c[0])
+
+    def __repr__(self):
+        return '%s(%d, %s)' % (
+            self.__class__.__name__,
+            self.n,
+            repr(self.children[0]),
+            )
+
+
+class AssertEnd(AST0):
+    static = [Instruction('assert_end')]
+
+
+class AssertStart(AST0):
+    static = [Instruction('assert_start')]
+
+
+class Char(AST):
+    def __init__(self, char):
+        self.char = char
+        super().__init__()
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, repr(self.char))
+
+    def do(self, c, flags):
+        if flags & IGNORECASE:
+            return [Instruction('inexact', self.char)]
+        else:
+            return [Instruction('exact', self.char)]
+
+
+class Any(AST0):
+    static = [Instruction('any')]
+
+
+class Star(AST1):
+    def do(self, c, flags):
+        return kleene(c[0])
+
+
+class Plus(AST1):
+    def do(self, c, flags):
+        return c[0] + [Instruction('skip', -len(c[0]), 1)]
+
+
+class Class(AST):
+    def __init__(self, classdef):
+        self.classdef = classdef
+        super().__init__()
+
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, repr(self.classdef))
+
+    def do(self, c, flags):
+        if self.classdef == '^':
+            expansion = expandclass(self.classdef[1:])
+        else:
+            expansion = expandclass(self.classdef)
+
+        if flags & IGNORECASE:
+            expansion = ''.join(
+                sorted(set(expansion.lower() + expansion.upper())))
+
+        if self.classdef[0] == '^':
+            return [Instruction('-class', expansion)]
+        else:
+            return [Instruction('+class', expansion)]
 
 
 rpg = rply.ParserGenerator(lexer.terminals)
 
 @rpg.production('top :')
 def top_nothing(state, p):
-    return []
+    return Nowt()
 
 @rpg.production('top : re')
 def top_re(state, p):
@@ -114,19 +259,15 @@ def re_concat(state, p):
 
 @rpg.production('re : re | concat')
 def re_alternate(state, p):
-    return (
-        [Instruction('skip', 1, len(p[0]) + 2)]
-        + p[0]
-        + [Instruction('skip', len(p[2]) + 1)]
-        + p[2])
+    return Alternative(p[0], p[2])
 
 @rpg.production('re : | concat')
 def re_leftmaybe(state, p):
-    return maybe(p[1])
+    return Question(p[1])
 
 @rpg.production('re : re |')
 def re_rightmaybe(state, p):
-    return maybe(p[0])
+    return Question(p[0])
 
 @rpg.production('concat : repeat')
 def concat_1(state, p):
@@ -134,7 +275,7 @@ def concat_1(state, p):
 
 @rpg.production('concat : concat repeat')
 def concat_2(state, p):
-    return p[0] + p[1]
+    return Concat(p[0], p[1])
 
 @rpg.production('exciting_syntax_char : (')
 @rpg.production('exciting_syntax_char : )')
@@ -155,42 +296,38 @@ def syntax_char(state, p):
 
 @rpg.production('single : ( re )')
 def single_parens(state, p):
-    return save(p[0].parenc - state.unparen, p[1])
+    return Save(p[0].parenc - state.unparen, p[1])
 
 @rpg.production('single : ( )')
 def single_parens_empty(state, p):
-    return save(p[0].parenc - state.unparen, [])
+    return Save(p[0].parenc - state.unparen, Nowt())
 
 @rpg.production('single : $')
 def single_assert_end(state, p):
-    return [Instruction('assert_end')]
+    return AssertEnd()
 
 @rpg.production('single : ^')
 def single_assert_start(state, p):
-    return [Instruction('assert_start')]
+    return AssertStart()
 
 @rpg.production('single : CHAR')
 @rpg.production('single : boring_syntax_char')
 def single_char(state, p):
-    if state.flags & IGNORECASE:
-        return [Instruction('inexact', p[0].value)]
-    else:
-        return [Instruction('exact', p[0].value)]
+    return Char(p[0].value)
 
 @rpg.production('single : \\ syntax_char')
 def single_escaped_syntax(state, p):
-    codelet = [Instruction('exact', p[1].value)]
     if p[1].value == '(':
         state.unparen += 1
-    return codelet
+    return Char(p[1].value)
 
 @rpg.production('single : \\ CHAR')
 def single_escaped_boring(state, p):
-    return [Instruction('exact', p[1].value)]
+    return Char(p[1].value)
 
 @rpg.production('single : .')
 def single_dot(state, p):
-    return [Instruction('any')]
+    return Any()
 
 @rpg.production('single : bracket_expression')
 @rpg.production('repeat : single')
@@ -199,26 +336,19 @@ def repeat_single(state, p):
 
 @rpg.production('repeat : single *')
 def repeat_star(state, p):
-    return kleene(p[0])
+    return Star(p[0])
 
 @rpg.production('repeat : single +')
 def repeat_plus(state, p):
-    return (
-        p[0]
-        + [Instruction('skip', -len(p[0]), 1)]
-        )
+    return Plus(p[0])
 
 @rpg.production('repeat : single ?')
 def repeat_maybe(state, p):
-    return maybe(p[0])
+    return Question(p[0])
 
 @rpg.production('bracket_expression : [ bracket_list ]')
 def bracket_expression(state, p):
-    charclass = p[1]
-    if charclass[0] == '^':
-        return [Instruction('-class', expandclass(charclass[1:]))]
-    else:
-        return [Instruction('+class', expandclass(charclass))]
+    return Class(p[1])
 
 @rpg.production('bracket_list_boring_start : CHAR')
 @rpg.production('bracket_list_boring_start : exciting_syntax_char')
@@ -431,8 +561,9 @@ class ReapPattern:
     def __init__(self, pattern, flags = 0):
         self.pattern = pattern
         self.flags = flags
-        self.forward = parser.parse(
-            lexer.lex(pattern), state=ParseState(self.flags))
+        self.ast = parser.parse(
+            lexer.lex(pattern), state=ParseState())
+        self.forward = self.ast.forward(flags)
         if flags & DEBUG:
             for i in self.forward:
                 print(i)
@@ -655,6 +786,8 @@ if __name__ == '__main__':
                 (r'a', IGNORECASE, 'A', True),
                 (r'b', IGNORECASE, 'A', False),
                 (r'a+', IGNORECASE, 'aAAAaa', True),
+                (r'[ab]', IGNORECASE, 'b', True),
+                (r'[ab]', IGNORECASE, 'A', True),
                 ]:
             tryre(oflags|flags, regex, string, expected)
     print()

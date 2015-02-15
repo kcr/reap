@@ -493,7 +493,7 @@ def tryre(flags, re, string, expected):
     try:
         sys.stdout.write('.')
         sys.stdout.flush()
-        dprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
+        dprint('Trying', string, 'against', re, 'with', hex(flags), end=': ')
         dprint()
         r = ReapPattern(re, flags)
         m = r.match(string)
@@ -504,11 +504,11 @@ def tryre(flags, re, string, expected):
         if result:
             dprint('Got ', m)
         else:
-            nprint('Trying', string, 'against', re, 'with', execute.__name__, end=': ')
+            nprint('Trying', string, 'against', re, 'with', hex(flags), end=': ')
             print('Got', m, 'expected', expected)
         dprint()
     except:
-        print('while trying', string, 'against', re, 'with', execute.__name__, end=': ')
+        print('while trying', string, 'against', re, 'with', hex(flags), end=': ')
         raise
 
 if __name__ == '__main__':

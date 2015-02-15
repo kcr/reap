@@ -652,7 +652,7 @@ def tryre(flags, re, string, expected):
             print('Got', m, 'expected', expected)
         dprint()
     except:
-        print('while trying', string, 'against', re, 'with', hex(flags), end=': ')
+        print('while trying', string, 'against', re, 'with', hex(flags), ':')
         raise
 
 if __name__ == '__main__':

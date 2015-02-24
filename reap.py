@@ -609,7 +609,9 @@ class ReapPattern:
             return ReapMatch(string, result)
         return None
 
-#compile=ReapPattern
+
+if __name__ != '__main__':
+    compile = ReapPattern
 
 
 class ReapMatch:

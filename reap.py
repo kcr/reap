@@ -95,6 +95,7 @@ lexer = MyLexer()
 class ParseState:
     def __init__(self):
         self.unparen = 0
+        self.savemax = -1
 
 
 class AST:
@@ -296,11 +297,14 @@ def syntax_char(state, p):
 
 @rpg.production('single : ( re )')
 def single_parens(state, p):
-    return Save(p[0].parenc - state.unparen, p[1])
+    slot = p[0].parenc - state.unparen
+    if slot > state.savemax:
+        state.savemax = slot
+    return Save(slot, p[1])
 
 @rpg.production('single : ( )')
 def single_parens_empty(state, p):
-    return Save(p[0].parenc - state.unparen, Nowt())
+    return single_parens(state, [p[0], Nowt(), p[1]])
 
 @rpg.production('single : $')
 def single_assert_end(state, p):
@@ -581,32 +585,52 @@ class ReapPattern:
     def __init__(self, pattern, flags = 0):
         self.pattern = pattern
         self.flags = flags
-        self.ast = parser.parse(
-            lexer.lex(pattern), state=ParseState())
+        state = ParseState()
+        self.ast = parser.parse(lexer.lex(pattern), state=state)
+        self.savemax = state.savemax
         self.forward = self.ast.forward(flags)
+        self.backward = self.ast.backward(flags)
         if flags & DEBUG:
             for i in self.forward:
                 print(i)
 
-    def match(self, string): # pos, endpos
+    def match(self, string, pos=None, endpos=None):
         return self.execute(
             string,
-            save(0, self.forward) + [Instruction('match')])
+            save(0, self.forward) + [Instruction('match')],
+            pos,
+            endpos,
+            )
 
-    def search(self, string): # pos, endpos
+    def search(self, string, pos=None, endpos=None):
         return self.execute(
             string,
-            kleene([Instruction('any')])
-            + save(0, self.forward)
-            + [Instruction('match')])
+            (kleene([Instruction('any')])
+                + save(0, self.forward)
+                + [Instruction('match')]
+            ),
+            pos,
+            endpos,
+            )
 
-    def execute(self, string, codelet):
+    def search_backward(self, string, pos=None, endpos=None):
+        return self.execute(
+            string,
+            (kleene([Instruction('any')])
+                + save(0, self.backward)
+                + [Instruction('match')]
+            ),
+            pos,
+            endpos,
+            )
+
+    def execute(self, string, codelet, pos, endpos):
         x = execute_threaded
         if self.flags & BACKTRACK:
             x = execute_backtrack
-        result = x(codelet, string)
+        result = x(codelet, string, pos, endpos)
         if result:
-            return ReapMatch(string, result)
+            return ReapMatch(string, result, self.savemax)
         return None
 
 
@@ -615,15 +639,31 @@ if __name__ != '__main__':
 
 
 class ReapMatch:
-    def __init__(self, string, result):
+    def __init__(self, string, result, savemax):
         self.string = string
         self.result = result
+        self.savemax = savemax
 
     def __repr__(self):
         return (
             'ReapMatch(' +
-            ', '.join(str(x) for x in (self.string, self.result))
+            ', '.join(repr(x) for x in (self.string, self.result, self.savemax))
             + ')')
+
+    def start(self, group):
+        return self.span(group)[0]
+
+    def end(self, group):
+        return self.span(group)[1]
+
+    def span(self, group):
+        if not 0 <= group <= self.savemax:
+            raise IndexError('group out of range')
+        start = self.result.get(group * 2, -1)
+        end = self.result.get(group * 2 + 1, -1)
+        if start == -1 or end == -1:
+            return (-1, -1)
+        return (start, end)
 
 
 debugging = False

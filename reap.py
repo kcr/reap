@@ -650,13 +650,13 @@ class ReapMatch:
             ', '.join(repr(x) for x in (self.string, self.result, self.savemax))
             + ')')
 
-    def start(self, group):
+    def start(self, group=0):
         return self.span(group)[0]
 
-    def end(self, group):
+    def end(self, group=0):
         return self.span(group)[1]
 
-    def span(self, group):
+    def span(self, group=0):
         if not 0 <= group <= self.savemax:
             raise IndexError('group out of range')
         start = self.result.get(group * 2, -1)

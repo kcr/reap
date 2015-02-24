@@ -398,13 +398,24 @@ def expandclass(s):
     return r
 
 
-def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=None, tick=None, saved=None):
+def execute_backtrack(
+        codelet, string, pos = None, endpos = None,
+        off = 0, ip = 0, level = 0, scoreboard=None, tick=None, saved=None):
+    # XXX I feel like off and pos are redundant but don't feel like
+    # thinking about the backtracker enough to untangle them at the
+    # moment.
     if saved is None:
         saved = {}
     if tick is None:
         tick = 0
     if scoreboard is None:
         scoreboard = [None] * len(codelet)
+
+    if endpos is not None:
+        string = string[:endpos]
+    if pos is not None:
+        string = string[pos:]
+        off += pos
 
     for i, c in enumerate(itertools.chain(string, [''])):
         process = True
@@ -447,7 +458,7 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
                 scoreboard[ip] = tick
                 for target in instruction.rest[:-1]:
                     r = execute_backtrack(
-                        codelet, string[i:], i + off,
+                        codelet, string[i:], None, None, i + off,
                         ip + target, level + 1, scoreboard, tick, dict(saved))
                     if r:
                         return r
@@ -471,7 +482,7 @@ def execute_backtrack(codelet, string, off = 0, ip = 0, level = 0, scoreboard=No
     return saved
 
 
-def execute_threaded(codelet, string):
+def execute_threaded(codelet, string, pos=None, endpos=None):
     dprint()
     dprint(codelet)
     currentthreads = collections.deque()
@@ -479,6 +490,15 @@ def execute_threaded(codelet, string):
     scoreboard = [None] * len(codelet)
     i = 0
     match = False
+
+    # build up the iterator
+    iterator = iter(string)
+    if endpos is not None:
+        iterator = itertools.islice(endpos)
+    iterator = itertools.chain(iterator, [''])
+    iterator = enumerate(iterator)
+    if pos is not None:
+        iterator = itertools.islice(pos, None)
 
     def addthread(add, ip, cp, saved, level=0):
         if scoreboard[ip] == tick:
@@ -504,7 +524,7 @@ def execute_threaded(codelet, string):
     addthread(currentthreads.append, 0, 0, {})  # one thread starting at the beginning
 
     dprint(currentthreads)
-    for i, c in enumerate(itertools.chain(string, [''])):
+    for i, c in iterator:
         tick += 1
         dprint()
         dprint(repr(c))

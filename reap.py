@@ -87,7 +87,7 @@ lexer = MyLexer()
 class ParseState:
     def __init__(self):
         self.unparen = 0
-        self.savemax = -1
+        self.savemax = 0
 
 
 class AST:

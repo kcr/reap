@@ -63,14 +63,6 @@ def save(n, codelet):
         )
 
 
-def kleene(codelet):
-    return (
-        [Instruction('skip', 1, len(codelet) + 2)]
-        + codelet
-        + [Instruction('skip', -len(codelet) - 1)]
-        )
-
-
 class MyLexer:
     syntax = r'\()|*+?.$[^-]'
     default = 'CHAR'
@@ -212,7 +204,11 @@ class Any(AST0):
 
 class Star(AST1):
     def do(self, c, flags):
-        return kleene(c[0])
+        return (
+            [Instruction('skip', 1, len(c[0]) + 2)]
+            + c[0]
+            + [Instruction('skip', -len(c[0]) - 1)]
+            )
 
 
 class Plus(AST1):
@@ -605,7 +601,9 @@ class ReapPattern:
     def search(self, string, pos=None, endpos=None):
         return self.execute(
             string,
-            (kleene([Instruction('any')])
+            ([  Instruction('skip', 3, 1),
+                Instruction('any'),
+                Instruction('skip', -2)] # .*?
                 + save(0, self.forward)
                 + [Instruction('match')]
             ),
@@ -613,10 +611,13 @@ class ReapPattern:
             endpos,
             )
 
+
     def search_backward(self, string, pos=None, endpos=None):
         return self.execute(
             string,
-            (kleene([Instruction('any')])
+            ([  Instruction('skip', 3, 1),
+                Instruction('any'),
+                Instruction('skip', -2)] # .*?
                 + save(0, self.backward)
                 + [Instruction('match')]
             ),

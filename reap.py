@@ -590,6 +590,12 @@ class ReapPattern:
             for i in self.forward:
                 print(i)
 
+    def __repr__(self):
+        return (
+            self.__class__.__name__ + '(' +
+            ', '.join(repr(x) for x in (self.pattern, self.flags))
+            + ')')
+
     def match(self, string, pos=None, endpos=None):
         return self.execute(
             string,

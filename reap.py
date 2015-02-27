@@ -604,6 +604,14 @@ class ReapPattern:
             endpos,
             )
 
+    def match_backward(self, string, pos=None, endpos=None):
+        return self.execute(
+            string,
+            save(0, self.backward) + [Instruction('match')],
+            pos,
+            endpos,
+            )
+
     def search(self, string, pos=None, endpos=None):
         return self.execute(
             string,

@@ -34,10 +34,10 @@ def main():
                 c.match(s)
 
         print('reap ', end='')
-        c = reap.re_compile(tre)
+        c = reap.compile(tre)
         with timer():
             for _ in range(COUNT):
-                reap.execute_threaded(c, s)
+                c.match(s)
 
 
 if __name__ == '__main__':

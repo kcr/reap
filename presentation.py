@@ -1,12 +1,14 @@
-#!/usr/bin/python3
+
 #
-# Regular Expression Automatons for Python
+# Pure Python Regular Expression Matching
+#
+# Regular Expression Automatons in Python
 #
 # Karl Ramm
 #
 # github.com/kcr/reap
 #
-# 2015-04-11
+# 2015-04-11 (not given)
 
 #!/usr/bin/python3
 
